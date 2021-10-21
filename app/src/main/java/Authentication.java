@@ -13,11 +13,8 @@ import com.wrapper.spotify.requests.authorization.authorization_code.pkce.Author
 import org.apache.hc.core5.http.ParseException;
 import utility.PKCE;
 
-class AuthUtil {
-    public static AuthorizerPKCE.Builder AuthenticateWithPKCE(SpotifyApi spotifyApi){
-        return new AuthorizerPKCE.Builder(spotifyApi);
-    }
-}
+// TODO: Add classes for the 3 other authorization flows
+// TODO: Add abstract base class, and interface? for them that they inherit from or implement. Or both
 
 class AuthorizerPKCE {
 
@@ -38,7 +35,7 @@ class AuthorizerPKCE {
         this.showDialog = builder.showDialog;
     }
 
-    // TODO: Make sure you handle STATE when dealing with code getting, token getting etc. Check the guides etc.
+    // TODO: USE STATE when dealing with code getting, token getting etc. Check the guides etc.
     public static class Builder {
         private String codeVerifier;
         private String codeChallenge;

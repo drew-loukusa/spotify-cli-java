@@ -23,7 +23,6 @@ class SpotifyManager{
 
         // If user did not set ENV vars, or create .env file, use defaults
         // For obvious reasons, there is no default for CLIENT_SECRET
-        // TODO: Read these from a config file or something
         if (SPOTIFY_CLIENT_ID == null) SPOTIFY_CLIENT_ID = "e896df19119b4105a6e49585b8013bb9";
         if (SPOTIFY_REDIRECT_URI == null) SPOTIFY_REDIRECT_URI = "http://localhost:8080";
 
