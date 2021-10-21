@@ -1,0 +1,4 @@
+rootProject.name = 'spotify-cli'
+include 'app'
+//include 'list.java'
+
