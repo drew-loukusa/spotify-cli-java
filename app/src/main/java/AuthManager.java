@@ -29,60 +29,101 @@ class AuthManager {
     //TODO: Eliminate hardcoded path string
     private static final String TOKEN_CACHE = "C:\\src\\java-spotify-cli\\app\\token_cache.txt";
 
+    // Fields that must be set at object instantiation
     private SpotifyApi spotifyApi;
     private AbstractAuthorizationFlow authorizationFlow;
+    private boolean refreshEnabled;
+    private boolean tokenCachingEnabled;
+
+    // Fields that are set and managed after object instantiation (Thus are not in builder)
     private String accessToken = "";
     private String refreshToken = "";
     private String accessDuration = "NULL";
     private String accessCreationTimeStamp = "NULL";
 
-    public AuthManager(AbstractAuthorizationFlow authorizationFlow){
-        this.authorizationFlow = authorizationFlow;
-        this.spotifyApi = authorizationFlow.getSpotify();
+    private AuthManager(Builder builder){
+        this.authorizationFlow = builder.authorizationFlow;
+        this.spotifyApi = builder.spotifyApi;
+        this.refreshEnabled = builder.refreshEnabled;
+        this.tokenCachingEnabled = builder.tokenCachingEnabled;
     }
 
-    // TODO: Add method for refreshing access token. I THINK I can do that here
-    // I think it does not need to be tied to any particular flow
-    // NOTE: Whether or not you can refresh the access token DOES depend on the particular flow though so...
+    public static class Builder {
+        private SpotifyApi spotifyApi;
+        private AbstractAuthorizationFlow authorizationFlow;
+        private boolean refreshEnabled = true;
+        private boolean tokenCachingEnabled = true;
+        public Builder(AbstractAuthorizationFlow authorizationFlow, SpotifyApi spotifyApi){
+            this.authorizationFlow = authorizationFlow;
+            this.spotifyApi = spotifyApi;
+        }
+
+        /**
+         * Disables token refreshing: I.E. If a cached access token is invalid or expired, the app will not try
+         * to refresh it. Instead, a new token is acquired through the configured authentication flow
+         */
+        public Builder disableRefresh(){
+            this.refreshEnabled = false;
+            return this;
+        }
+
+        /**
+         * Disables token caching. NOTE: Also disables token refresh, since token refresh relies on the token cache
+         */
+        public Builder disableTokenCaching(){
+            this.tokenCachingEnabled = false;
+            return this;
+        }
+
+        public AuthManager build(){
+            return new AuthManager(this);
+        }
+    }
 
     // TODO: Switch these print statements over to a logger
     public Authentication authenticateSpotifyInstance(){
+
+        if (!tokenCachingEnabled) System.out.println("NOTE: Token caching disabled");
+        if (!refreshEnabled) System.out.println("NOTE: Token refresh disabled");
+
         // Try to load tokens from the cache
         var cacheState = loadTokensFromCache();
-        if (cacheState == CacheState.ACCESS_TOKEN_VALID) {
-            setTokensOnSpotifyInstance();
+        if (tokenCachingEnabled) {
+            if (cacheState == CacheState.ACCESS_TOKEN_VALID) {
+                setTokensOnSpotifyInstance();
 
-            //If connection is good, tokens are good
-            var pair = testSpotifyConnection();
-            if (pair.getFirst()){
-                System.out.println("Successfully retrieved access token from cache");
-                return Authentication.SUCCESS;
+                //If connection is good, tokens are good
+                var pair = testSpotifyConnection();
+                if (pair.getFirst()) {
+                    System.out.println("NOTE: Successfully retrieved access token from cache");
+                    return Authentication.SUCCESS;
+                }
+
+                System.out.println(pair.getSecond());
+                cacheState = CacheState.ACCESS_TOKEN_INVALID;
             }
-
-            System.out.println(pair.getSecond());
-            cacheState = CacheState.ACCESS_TOKEN_INVALID;
-        }
-        if(cacheState == CacheState.CACHE_DNE){
-            System.out.println("Token cache does not exist");
-        }
-        else if(cacheState == CacheState.ACCESS_TOKEN_EXPIRED) {
-            System.out.println("Cached token was expired");
-        }
-        else if (cacheState == CacheState.ACCESS_TOKEN_INVALID ){
-            System.out.println("Cached token was invalid");
+            if (cacheState == CacheState.CACHE_DNE) {
+                System.out.println("NOTE: Token cache does not exist");
+            } else if (cacheState == CacheState.ACCESS_TOKEN_EXPIRED) {
+                System.out.println("NOTE: Cached token was expired");
+            } else if (cacheState == CacheState.ACCESS_TOKEN_INVALID) {
+                System.out.println("NOTE: Cached token was invalid");
+            }
         }
 
         // Try to refresh the access token, provided that selected auth flow supports refresh and the token cache exists
-        if (authorizationFlow.isRefreshable() && cacheState != CacheState.CACHE_DNE ){
-            if (authRefresh()) {
-                setTokensOnSpotifyInstance();
+        if (tokenCachingEnabled && refreshEnabled) {
+            if (authorizationFlow.isRefreshable() && cacheState != CacheState.CACHE_DNE) {
+                if (authRefresh()) {
+                    setTokensOnSpotifyInstance();
 
-                var pair = testSpotifyConnection();
-                if (pair.getFirst()) {
-                    System.out.println("Successfully refreshed access token from Spotify!");
-                    return Authentication.SUCCESS;
+                    var pair = testSpotifyConnection();
+                    if (pair.getFirst()) {
+                        System.out.println("NOTE: Successfully refreshed the access token");
+                        return Authentication.SUCCESS;
+                    }
+                    System.out.println(pair.getSecond());
                 }
-                System.out.println(pair.getSecond());
             }
         }
 
@@ -92,7 +133,7 @@ class AuthManager {
         setTokensOnSpotifyInstance();
         var pair = testSpotifyConnection();
         if (pair.getFirst()){
-            System.out.println("Successfully retrieved a new access token from Spotify!");
+            System.out.println("NOTE: Successfully retrieved a new access token from Spotify");
             return Authentication.SUCCESS;
         }
 

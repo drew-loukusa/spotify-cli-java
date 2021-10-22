@@ -116,6 +116,7 @@ class InfoCommand implements Callable<Integer> {
     public void getArtist_Sync() throws IOException, ParseException, SpotifyWebApiException {
 
         var spotifyApi = SpotifyManager.CreateSession();
+        if (spotifyApi == null) System.exit(1);
 
         GetArtistRequest getArtistRequest = spotifyApi.getArtist(itemID)
                 .build();

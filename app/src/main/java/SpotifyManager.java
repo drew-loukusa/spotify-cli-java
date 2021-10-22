@@ -47,7 +47,12 @@ class SpotifyManager{
                 //.scope("user-read-birthdate,user-read-email")
                 .showDialog(false)
                 .build();
-        var authManager = new AuthManager(authFlow);
+
+        var authManager = new AuthManager.Builder(authFlow, spotifyApi)
+                //.disableTokenCaching()
+                //.disableRefresh()
+                .build();
+
         if (authManager.authenticateSpotifyInstance() == AuthManager.Authentication.FAIL){
             return null;
         }
