@@ -10,6 +10,10 @@ class SpotifyManager{
     private static String SPOTIFY_CLIENT_SECRET;
     public static String SPOTIFY_REDIRECT_URI;
 
+    // TODO: Convert this into non-static class with an internal builder class
+    // I'm allowing users to change the authorization flow used, so this class will have to be able to take
+    // optional paramaters in order to allow that
+
     public static SpotifyApi CreateSession(){
 
          dotenv = Dotenv.configure()
@@ -36,7 +40,17 @@ class SpotifyManager{
 
         var spotifyApi = spotifyApiBuilder.build();
 
-        new AuthManager(spotifyApi).authenticateApplication();
+        // TODO: Configure auth flow by reading a config file
+        // TODO: Maybe scope too?
+        // TODO: Might be useful to read a lot of items from an config file
+        var authFlow = new AuthorizationFlowPKCE.Builder(spotifyApi)
+                //.scope("user-read-birthdate,user-read-email")
+                .showDialog(false)
+                .build();
+        var authManager = new AuthManager(authFlow);
+        if (authManager.authenticateSpotifyInstance() == AuthManager.Authentication.FAIL){
+            return null;
+        }
 
         return spotifyApi;
     }
