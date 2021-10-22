@@ -136,8 +136,8 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
     public AuthorizationCodeCredentials authorize() {
         AuthorizationCodeUriRequest.Builder requestBuilder = spotifyApi.authorizationCodePKCEUri(codeChallenge)
                 .show_dialog(this.showDialog);
-        if (this.state != "") requestBuilder.state(this.state);
-        if (this.scope != "") requestBuilder.scope(this.scope);
+        if (!this.state.equals("")) requestBuilder.state(this.state);
+        if (!this.scope.equals("")) requestBuilder.scope(this.scope);
 
         URI uri = requestBuilder.build().execute();
 
