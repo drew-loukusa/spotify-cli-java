@@ -5,6 +5,8 @@ import com.wrapper.spotify.requests.data.artists.GetArtistRequest;
 
 import kotlin.Pair;
 import org.apache.hc.core5.http.ParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -13,6 +15,8 @@ import java.nio.file.Paths;
 import java.util.List;
 
 class AuthManager {
+
+    private static final Logger logger = (Logger) LoggerFactory.getLogger("spotify-cli-java.AuthManager");
 
     public enum Authentication {
         SUCCESS,
@@ -26,8 +30,8 @@ class AuthManager {
         ACCESS_TOKEN_INVALID,
     }
 
-    //TODO: Eliminate hardcoded path string
-    private static final String TOKEN_CACHE = "C:\\src\\java-spotify-cli\\app\\token_cache.txt";
+    // Provide default, but don't make final so path can be changed by user
+    private String TOKEN_CACHE_PATH = "token_cache.txt";
 
     // Fields that must be set at object instantiation
     private SpotifyApi spotifyApi;
@@ -42,6 +46,9 @@ class AuthManager {
     private String accessCreationTimeStamp = "NULL";
 
     private AuthManager(Builder builder){
+        if (!builder.tokenCacheFilePath.equals("")){
+            TOKEN_CACHE_PATH = builder.tokenCacheFilePath;
+        }
         this.authorizationFlow = builder.authorizationFlow;
         this.spotifyApi = builder.spotifyApi;
         this.refreshEnabled = builder.refreshEnabled;
@@ -49,6 +56,7 @@ class AuthManager {
     }
 
     public static class Builder {
+        private String tokenCacheFilePath = "";
         private SpotifyApi spotifyApi;
         private AbstractAuthorizationFlow authorizationFlow;
         private boolean refreshEnabled = true;
@@ -56,6 +64,11 @@ class AuthManager {
         public Builder(AbstractAuthorizationFlow authorizationFlow, SpotifyApi spotifyApi){
             this.authorizationFlow = authorizationFlow;
             this.spotifyApi = spotifyApi;
+        }
+
+        public Builder tokenCacheFilePath(String tokenCacheFilePath){
+            this.tokenCacheFilePath = tokenCacheFilePath;
+            return this;
         }
 
         /**
@@ -79,12 +92,11 @@ class AuthManager {
             return new AuthManager(this);
         }
     }
-
-    // TODO: Switch these print statements over to a logger
+    
     public Authentication authenticateSpotifyInstance(){
 
-        if (!tokenCachingEnabled) System.out.println("NOTE: Token caching disabled");
-        if (!refreshEnabled) System.out.println("NOTE: Token refresh disabled");
+        if (!tokenCachingEnabled) logger.info("Token caching disabled");
+        if (!refreshEnabled) logger.info("Token refresh disabled");
 
         // Try to load tokens from the cache
         var cacheState = loadTokensFromCache();
@@ -95,19 +107,19 @@ class AuthManager {
                 //If connection is good, tokens are good
                 var pair = testSpotifyConnection();
                 if (pair.getFirst()) {
-                    System.out.println("NOTE: Successfully retrieved access token from cache");
+                    logger.info("Successfully retrieved access token from cache");
                     return Authentication.SUCCESS;
                 }
 
-                System.out.println(pair.getSecond());
+                logger.info(pair.getSecond());
                 cacheState = CacheState.ACCESS_TOKEN_INVALID;
             }
             if (cacheState == CacheState.CACHE_DNE) {
-                System.out.println("NOTE: Token cache does not exist");
+                logger.info("Token cache does not exist");
             } else if (cacheState == CacheState.ACCESS_TOKEN_EXPIRED) {
-                System.out.println("NOTE: Cached token was expired");
+                logger.info("Cached token was expired");
             } else if (cacheState == CacheState.ACCESS_TOKEN_INVALID) {
-                System.out.println("NOTE: Cached token was invalid");
+                logger.info("Cached token was invalid");
             }
         }
 
@@ -119,10 +131,11 @@ class AuthManager {
 
                     var pair = testSpotifyConnection();
                     if (pair.getFirst()) {
-                        System.out.println("NOTE: Successfully refreshed the access token");
+                        logger.info("Successfully refreshed the access token");
                         return Authentication.SUCCESS;
                     }
-                    System.out.println(pair.getSecond());
+                    if (tokenCachingEnabled)
+                        cacheTokensToFile();
                 }
             }
         }
@@ -130,37 +143,39 @@ class AuthManager {
         // If valid tokens could not be retrieved any other way, require a full refresh
         // Typically this means the user will have to sign in
         fullAuthRefresh();
+        if (tokenCachingEnabled)
+            cacheTokensToFile();
         setTokensOnSpotifyInstance();
         var pair = testSpotifyConnection();
         if (pair.getFirst()){
-            System.out.println("NOTE: Successfully retrieved a new access token from Spotify");
+            logger.info("Successfully retrieved a new access token from Spotify");
             return Authentication.SUCCESS;
         }
 
-        System.out.println(pair.getSecond());
+        logger.info(pair.getSecond());
         return Authentication.FAIL;
     }
 
     private void cacheTokensToFile(){
-        try (var fileWriter = new FileWriter(TOKEN_CACHE)) {
+        try (var fileWriter = new FileWriter(TOKEN_CACHE_PATH)) {
             fileWriter.write("ACCESS_TOKEN\t" + accessToken + "\n");
             fileWriter.write("REFRESH_TOKEN\t" + refreshToken + "\n");
             fileWriter.write("ACCESS_DURATION_SECONDS\t" + accessDuration + "\n");
             fileWriter.write("ACCESS_CREATION_TIMESTAMP\t" + accessCreationTimeStamp + "\n");
             fileWriter.write("ACCESS_CREATION_FORMAT\tHH:MM:SS\n");
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            logger.error(e.getMessage());
         }
     }
 
     private CacheState loadTokensFromCache() {
         // If cache file has not been created yet
-        if (Files.notExists(Paths.get(TOKEN_CACHE))) {
+        if (Files.notExists(Paths.get(TOKEN_CACHE_PATH))) {
             return CacheState.CACHE_DNE;
         }
 
         try {
-            List<String> lines = Files.readAllLines(Paths.get(TOKEN_CACHE));
+            List<String> lines = Files.readAllLines(Paths.get(TOKEN_CACHE_PATH));
             accessToken = lines.get(0).split("\t")[1];
             refreshToken = lines.get(1).split("\t")[1];
             accessDuration = lines.get(2).split("\t")[1];
@@ -175,6 +190,16 @@ class AuthManager {
         return CacheState.ACCESS_TOKEN_VALID;
     }
 
+    /**
+     * Using authorizationFlow, attempts to refresh the existing access token using the existing refresh token.
+     * Sets accessToken, refreshToken, accessDuration, and accessCreationTimeStamp if successful.
+     * NOTE: ONLY WORKS if the authorization flow type in use supports token refreshing, AND token caching is enabled.
+     *
+     * NOTE: Call authorizationFlow.isRefreshable() to check if an auth flow supports refreshing before calling this
+     * method.
+     *
+     * @return Success value as a boolean indicating if the auth flow was able to refresh the access token.
+     */
     private boolean authRefresh(){
         AuthorizationCodeCredentials credentials = authorizationFlow.refresh();
         if (credentials == null)
@@ -185,10 +210,14 @@ class AuthManager {
         accessDuration = credentials.getExpiresIn().toString();
         // TODO: Add getting current time in HH:MM:SS format
         //this.accessCreationTimeStamp =
-        cacheTokensToFile();
         return true;
     }
 
+    /**
+     * Using 'authorizationFlow', attempts to set, accessToken, refreshToken, accessDuration,
+     * and accessCreationTimeStamp. Depending on what authorization flow type is being used,
+     * the end user may be required to sign in.
+     */
     private void fullAuthRefresh(){
         AuthorizationCodeCredentials credentials = authorizationFlow.authorize();
 
@@ -198,7 +227,6 @@ class AuthManager {
         accessDuration = credentials.getExpiresIn().toString();
         // TODO: Add getting current time in HH:MM:SS format
         //this.accessCreationTimeStamp =
-        cacheTokensToFile();
     }
 
     private void setTokensOnSpotifyInstance(){
