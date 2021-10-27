@@ -24,7 +24,6 @@ application {
 }
 
 run{
-    classpath += files('src/../..')
     standardInput = System.in
 }
 
