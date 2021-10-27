@@ -1,7 +1,15 @@
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.model_objects.credentials.AuthorizationCodeCredentials;
+import com.wrapper.spotify.model_objects.credentials.ClientCredentials;
 import com.wrapper.spotify.requests.authorization.authorization_code.AuthorizationCodeUriRequest;
+import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERefreshRequest;
+import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERequest;
+import com.wrapper.spotify.requests.authorization.client_credentials.ClientCredentialsRequest;
+import org.apache.hc.core5.http.ParseException;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import utility.PKCE;
 
 import java.awt.*;
 import java.io.IOException;
@@ -9,22 +17,66 @@ import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.security.NoSuchAlgorithmException;
 
-import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERefreshRequest;
-import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERequest;
-import org.apache.hc.core5.http.ParseException;
-import utility.PKCE;
+// TODO: Add logging to PKCE (and the other future flows)
+// TODO: Add classes for the 1 remaining authorization flow
 
-// TODO: Add classes for the 3 other authorization flows
-// TODO: Add abstract base class, and interface? for them that they inherit from or implement. Or both
+class GenericCredentials {
+    private String accessToken = null;
+    private String refreshToken = null;
+    private Integer expiresIn = null;
+    private GenericCredentials(Builder builder) {
+        this.accessToken = builder.accessToken;
+        this.refreshToken = builder.refreshToken;
+        this.expiresIn = builder.expiresIn;
+    }
+
+    public static class Builder {
+
+        private String accessToken;
+        private String refreshToken;
+        private Integer expiresIn;
+
+        public Builder setAccessToken(String accessToken) {
+            this.accessToken = accessToken;
+            return this;
+        }
+
+        public Builder setRefreshToken(String refreshToken) {
+            this.refreshToken = refreshToken;
+            return this;
+        }
+
+        public Builder setExpiresIn(Integer expiresIn) {
+            this.expiresIn = expiresIn;
+            return this;
+        }
+
+        public GenericCredentials build() {
+            return new GenericCredentials(this);
+        }
+    }
+
+    public String getAccessToken(){
+        return accessToken;
+    }
+
+    public String getRefreshToken(){
+        return refreshToken;
+    }
+
+    public Integer getExpiresIn(){
+        return expiresIn;
+    }
+}
 
 interface IAuthorizationFlow {
-    AuthorizationCodeCredentials authorize();
+    GenericCredentials authorize();
     SpotifyApi getSpotify();
 
     // Can this authorization flow be refreshed?
     // That is, can the access token given by the flow be refreshed?
     boolean isRefreshable();
-    AuthorizationCodeCredentials refresh();
+    GenericCredentials refresh();
 }
 
 abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
@@ -47,7 +99,7 @@ abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
     }
 }
 
-class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
+class AuthFlowPKCE extends AbstractAuthorizationFlow {
 
     private String codeVerifier;
     private String codeChallenge;
@@ -55,7 +107,7 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
     private String scope;
     private boolean showDialog;
 
-    private AuthorizationFlowPKCE(Builder builder){
+    private AuthFlowPKCE(Builder builder){
         super(builder);
         codeVerifier = builder.codeVerifier;
         codeChallenge = builder.codeChallenge;
@@ -77,7 +129,7 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
         private String scope = "";
         private boolean showDialog = false;
 
-        public Builder(SpotifyApi spotifyApi){
+        public Builder(@NotNull SpotifyApi spotifyApi){
             super(spotifyApi);
         }
 
@@ -98,7 +150,7 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
             return this;
         }
 
-        public AuthorizationFlowPKCE build(){
+        public AuthFlowPKCE build(){
             try {
                 this.codeVerifier = PKCE.generateCodeVerifier();
             } catch (UnsupportedEncodingException e) {
@@ -110,7 +162,7 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
             }
-            return new AuthorizationFlowPKCE(this);
+            return new AuthFlowPKCE(this);
         }
 
         protected Builder self() {
@@ -119,21 +171,26 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
     }
 
     @Override
-    public AuthorizationCodeCredentials refresh() {
+    public GenericCredentials refresh() {
         AuthorizationCodePKCERefreshRequest authorizationCodePKCERefreshRequest = spotifyApi.authorizationCodePKCERefresh()
                 .build();
-        AuthorizationCodeCredentials codeCredentials = null;
+        AuthorizationCodeCredentials credentials = null;
         try {
-            codeCredentials = authorizationCodePKCERefreshRequest.execute();
+            credentials = authorizationCodePKCERefreshRequest.execute();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             //e.printStackTrace();
             System.out.println(e.getMessage());
         }
-        return codeCredentials;
+        return new GenericCredentials.Builder()
+                .setAccessToken(credentials.getAccessToken())
+                .setRefreshToken(credentials.getRefreshToken())
+                .setExpiresIn(credentials.getExpiresIn())
+                .build();
     }
 
+    @Nullable
     @Override
-    public AuthorizationCodeCredentials authorize() {
+    public GenericCredentials authorize() {
         AuthorizationCodeUriRequest.Builder requestBuilder = spotifyApi.authorizationCodePKCEUri(codeChallenge)
                 .show_dialog(this.showDialog);
         if (!this.state.equals("")) requestBuilder.state(this.state);
@@ -160,7 +217,12 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
                 .build();
 
         try {
-            return authCodePKCERequest.execute();
+            AuthorizationCodeCredentials credentials = authCodePKCERequest.execute();
+            return new GenericCredentials.Builder()
+                    .setAccessToken(credentials.getAccessToken())
+                    .setRefreshToken(credentials.getRefreshToken())
+                    .setExpiresIn(credentials.getExpiresIn())
+                    .build();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             System.err.println("Error: " + e.getMessage());
         }
@@ -170,5 +232,49 @@ class AuthorizationFlowPKCE extends AbstractAuthorizationFlow {
     @Override
     public boolean isRefreshable(){
         return true;
+    }
+}
+
+class AuthFlowClientCredentials extends AbstractAuthorizationFlow{
+
+    private AuthFlowClientCredentials(Builder builder){
+        super(builder);
+    }
+
+    public static class Builder extends AbstractAuthorizationFlow.Builder{
+        public Builder(@NotNull SpotifyApi spotifyApi){
+            super(spotifyApi);
+        }
+
+        public AuthFlowClientCredentials build(){
+            return new AuthFlowClientCredentials(this);
+        }
+    }
+
+    @Override
+    public boolean isRefreshable() {
+        return false;
+    }
+
+    @Override
+    public GenericCredentials refresh(){
+        return null;
+    }
+
+    @Override
+    public GenericCredentials authorize(){
+        ClientCredentialsRequest clientCredentialsRequest = spotifyApi.clientCredentials().build();
+
+        ClientCredentials credentials = null;
+        try {
+            credentials = clientCredentialsRequest.execute();
+        } catch (IOException | ParseException | SpotifyWebApiException e) {
+            e.printStackTrace();
+        }
+
+        return new GenericCredentials.Builder()
+                .setAccessToken(credentials.getAccessToken())
+                .setExpiresIn(credentials.getExpiresIn())
+                .build();
     }
 }

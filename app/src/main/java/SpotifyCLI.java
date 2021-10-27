@@ -1,5 +1,3 @@
-import com.wrapper.spotify.SpotifyApi;
-import com.wrapper.spotify.SpotifyHttpManager;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.model_objects.specification.Artist;
 import com.wrapper.spotify.requests.data.artists.GetArtistRequest;
@@ -10,7 +8,6 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.concurrent.Callable;
 
 @Command(
@@ -116,7 +113,8 @@ class InfoCommand implements Callable<Integer> {
     public void getArtist_Sync() throws IOException, ParseException, SpotifyWebApiException {
 
         var spotifyManager = new SpotifyManager.Builder()
-                .authFlowType("PKCE")
+                //.authFlowType("PKCE")
+                .authFlowType("ClientCredentials")
                 .build();
 
         var spotifyApi = spotifyManager.CreateSession();
@@ -134,15 +132,11 @@ class InfoCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        System.out.println("=============================================");
         try {
             getArtist_Sync();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             System.out.println("Error: " + e.getMessage());
         }
-
-        System.out.println("\n=============================================");
-
         return 0;
     }
 }

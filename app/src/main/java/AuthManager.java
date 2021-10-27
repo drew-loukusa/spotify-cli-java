@@ -1,10 +1,11 @@
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
-import com.wrapper.spotify.model_objects.credentials.AuthorizationCodeCredentials;
 import com.wrapper.spotify.requests.data.artists.GetArtistRequest;
 
 import kotlin.Pair;
 import org.apache.hc.core5.http.ParseException;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,7 +17,7 @@ import java.util.List;
 
 class AuthManager {
 
-    private static final Logger logger = (Logger) LoggerFactory.getLogger("spotify-cli-java.AuthManager");
+    private static final Logger logger = (Logger) LoggerFactory.getLogger("AuthManager");
 
     public enum Authentication {
         SUCCESS,
@@ -61,7 +62,7 @@ class AuthManager {
         private AbstractAuthorizationFlow authorizationFlow;
         private boolean refreshEnabled = true;
         private boolean tokenCachingEnabled = true;
-        public Builder(AbstractAuthorizationFlow authorizationFlow, SpotifyApi spotifyApi){
+        public Builder(@NotNull AbstractAuthorizationFlow authorizationFlow, @NotNull SpotifyApi spotifyApi){
             this.authorizationFlow = authorizationFlow;
             this.spotifyApi = spotifyApi;
         }
@@ -92,22 +93,29 @@ class AuthManager {
             return new AuthManager(this);
         }
     }
-    
+
     public Authentication authenticateSpotifyInstance(){
 
-        if (!tokenCachingEnabled) logger.info("Token caching disabled");
-        if (!refreshEnabled) logger.info("Token refresh disabled");
+        if (tokenCachingEnabled) {
+            logger.info("Token caching enabled");
+        } else {
+            logger.info("Token caching disabled");
+        }
+        if (refreshEnabled) {
+            logger.info("Token refresh enabled");
+        } else{
+            logger.info("Token refresh disabled");
+        }
 
         // Try to load tokens from the cache
-        var cacheState = loadTokensFromCache();
         if (tokenCachingEnabled) {
+            var cacheState = loadTokensFromCache();
             if (cacheState == CacheState.ACCESS_TOKEN_VALID) {
                 setTokensOnSpotifyInstance();
 
                 //If connection is good, tokens are good
                 var pair = testSpotifyConnection();
                 if (pair.getFirst()) {
-                    logger.info("Successfully retrieved access token from cache");
                     return Authentication.SUCCESS;
                 }
 
@@ -125,6 +133,7 @@ class AuthManager {
 
         // Try to refresh the access token, provided that selected auth flow supports refresh and the token cache exists
         if (tokenCachingEnabled && refreshEnabled) {
+            var cacheState = loadTokensFromCache();
             if (authorizationFlow.isRefreshable() && cacheState != CacheState.CACHE_DNE) {
                 if (authRefresh()) {
                     setTokensOnSpotifyInstance();
@@ -163,6 +172,7 @@ class AuthManager {
             fileWriter.write("ACCESS_DURATION_SECONDS\t" + accessDuration + "\n");
             fileWriter.write("ACCESS_CREATION_TIMESTAMP\t" + accessCreationTimeStamp + "\n");
             fileWriter.write("ACCESS_CREATION_FORMAT\tHH:MM:SS\n");
+            logger.info(String.format("Cached tokens to file with name \"%s\"", TOKEN_CACHE_PATH));
         } catch (IOException e) {
             logger.error(e.getMessage());
         }
@@ -180,6 +190,7 @@ class AuthManager {
             refreshToken = lines.get(1).split("\t")[1];
             accessDuration = lines.get(2).split("\t")[1];
             accessCreationTimeStamp = lines.get(3).split("\t")[1];
+            logger.info(String.format("Loaded tokens from file with name \"%s\"", TOKEN_CACHE_PATH));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -201,7 +212,7 @@ class AuthManager {
      * @return Success value as a boolean indicating if the auth flow was able to refresh the access token.
      */
     private boolean authRefresh(){
-        AuthorizationCodeCredentials credentials = authorizationFlow.refresh();
+        GenericCredentials credentials = authorizationFlow.refresh();
         if (credentials == null)
             return false;
         accessToken = credentials.getAccessToken();
@@ -219,7 +230,7 @@ class AuthManager {
      * the end user may be required to sign in.
      */
     private void fullAuthRefresh(){
-        AuthorizationCodeCredentials credentials = authorizationFlow.authorize();
+        GenericCredentials credentials = authorizationFlow.authorize();
 
         accessToken = credentials.getAccessToken();
         // TODO: What happens when an auth flow doesn't supply a refresh token?
@@ -232,7 +243,7 @@ class AuthManager {
     private void setTokensOnSpotifyInstance(){
         spotifyApi.setAccessToken(this.accessToken);
         // Not all auth flows return a refresh token, namely, Implicit Grand flow and Client Credentials flow
-        if (!this.refreshToken.equals("")) {
+        if (this.authorizationFlow.isRefreshable() && this.refreshToken != null && !this.refreshToken.equals("")) {
             spotifyApi.setRefreshToken(this.refreshToken);
         }
     }

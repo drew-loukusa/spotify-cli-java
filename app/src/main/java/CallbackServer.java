@@ -33,13 +33,13 @@ public class CallbackServer {
     protected static HttpServer server;
     private final authServerHandler requestHandler = new authServerHandler();
     private static final Logger logger
-            = (Logger) LoggerFactory.getLogger("spotify-cli-java.CallbackServer");
+            = (Logger) LoggerFactory.getLogger("CallbackServer");
 
     static public class authServerHandler implements HttpHandler {
         private final CountDownLatch tokenLatch = new CountDownLatch(1);
         private String authCode;
         private static final Logger logger
-                = (Logger) LoggerFactory.getLogger("spotify-cli-java.CallbackServer");
+                = (Logger) LoggerFactory.getLogger("]CallbackServer");
 
         @Override
         public void handle(HttpExchange httpExchange) throws IOException {

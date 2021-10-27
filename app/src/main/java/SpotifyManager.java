@@ -1,6 +1,7 @@
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.SpotifyHttpManager;
 import io.github.cdimascio.dotenv.Dotenv;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,7 +9,7 @@ import java.net.URI;
 
 class SpotifyManager{
 
-    private static final Logger logger = (Logger) LoggerFactory.getLogger("spotify-cli-java.SpotifyManager");
+    private static final Logger logger = (Logger) LoggerFactory.getLogger("SpotifyManager");
 
     private static final String DEFAULT_CLIENT_ID = "e896df19119b4105a6e49585b8013bb9";
     private static final String DEFAULT_REDIRECT_URI = "http://localhost:8080";
@@ -62,11 +63,14 @@ class SpotifyManager{
         }
     }
 
+    @Nullable
     public SpotifyApi CreateSession(){
-
-         var dotenv = Dotenv.configure()
-                 // Don't raise exceptions if .env is missing, or if a var isn't set.
-                 // MOST authentication methods don't require CLIENT_SECRET to be set
+        // dotenv will attempt to get vars from the local environment first. If no vars are set in the environment,
+        // then check it will check in the classpath for a .env file containing the vars
+        var dotenv = Dotenv.configure()
+                 // Don't raise exceptions if .env is missing, or if a var isn't set in the environment;
+                 // Defaults are provided for Client ID and redirect uri.
+                 // Additionally, MOST authentication methods don't require CLIENT_SECRET to be set
                 .ignoreIfMissing()
                 .load();
         String SPOTIFY_CLIENT_ID = dotenv.get("SPOTIFY_CLIENT_ID");
@@ -88,7 +92,10 @@ class SpotifyManager{
         }
 
         logger.info("SPOTIFY_CLIENT_ID: " + SPOTIFY_CLIENT_ID);
-        logger.info("SPOTIFY_CLIENT_SECRET: " + SPOTIFY_CLIENT_SECRET);
+        if (SPOTIFY_CLIENT_SECRET != null)
+            logger.info("SPOTIFY_CLIENT_SECRET: " + SPOTIFY_CLIENT_SECRET);
+        else
+            logger.info("SPOTIFY_CLIENT_SECRET: NOT SET");
         logger.info("SPOTIFY_REDIRECT_URI: " + SPOTIFY_CLIENT_ID);
 
         final URI spotifyURI = SpotifyHttpManager.makeUri(SPOTIFY_REDIRECT_URI);
@@ -97,7 +104,8 @@ class SpotifyManager{
                 .setClientId(SPOTIFY_CLIENT_ID)
                 .setRedirectUri(spotifyURI);
 
-        if (SPOTIFY_CLIENT_SECRET != null) spotifyApiBuilder.setClientSecret(SPOTIFY_CLIENT_SECRET);
+        if (SPOTIFY_CLIENT_SECRET != null)
+            spotifyApiBuilder.setClientSecret(SPOTIFY_CLIENT_SECRET);
 
         var spotifyApi = spotifyApiBuilder.build();
 
@@ -105,23 +113,30 @@ class SpotifyManager{
         // TODO: Maybe scope too?
         // TODO: Might be useful to read a lot of items from an config file
 
-        AuthorizationFlowPKCE authFlow = null;
+        AbstractAuthorizationFlow authFlow = null;
         // NOTE: More cases coming soon :)
         switch (authFlowType){
             case "PKCE":
                 logger.info("PKCE Auth flow selected");
-                authFlow = new AuthorizationFlowPKCE.Builder(spotifyApi)
+                authFlow = new AuthFlowPKCE.Builder(spotifyApi)
                         //.scope("user-read-birthdate,user-read-email")
                         .showDialog(false)
+                        .build();
+                break;
+
+            case "ClientCredentials":
+                logger.info("Client Credentials flow selected");
+                authFlow = new AuthFlowClientCredentials.Builder(spotifyApi)
                         .build();
                 break;
             default:
                logger.error("No auth flow selected");
         }
 
+        // TODO: Configure token caching and token refreshing via flags, OR via config file
         var authManager = new AuthManager.Builder(authFlow, spotifyApi)
-                //.disableTokenCaching()
-                //.disableRefresh()
+                .disableTokenCaching()
+                .disableRefresh()
                 .build();
 
         if (authManager.authenticateSpotifyInstance() == AuthManager.Authentication.FAIL){
