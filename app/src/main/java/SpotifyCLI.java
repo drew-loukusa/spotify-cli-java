@@ -1,3 +1,4 @@
+import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.model_objects.specification.Artist;
 import com.wrapper.spotify.requests.data.artists.GetArtistRequest;
@@ -111,13 +112,10 @@ class InfoCommand implements Callable<Integer> {
     }
 
     public void getArtist_Sync() throws IOException, ParseException, SpotifyWebApiException {
+        SpotifyApi spotifyApi = new SpotifyManager.Builder()
+                .build()
+                .CreateSession();
 
-        var spotifyManager = new SpotifyManager.Builder()
-                .authFlowType("PKCE")
-                //.authFlowType("ClientCredentials")
-                .build();
-
-        var spotifyApi = spotifyManager.CreateSession();
         if (spotifyApi == null) System.exit(1);
 
         GetArtistRequest getArtistRequest = spotifyApi.getArtist(itemID)

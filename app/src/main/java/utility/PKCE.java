@@ -1,7 +1,7 @@
 package utility;
 /*
  * The following code is borrowed code that I have modified.
- * The original author is Jaxcskn on github: https://github.com/jaxcksn/nanoleafMusic
+ * The original author is Jaxcskn on GitHub: https://github.com/jaxcksn/nanoleafMusic
  * If this file ever makes it into a repo of mine, I need to add his license or something? He was using BSD 3
  * I think just an acknowledgment in a credits section would be enough... Probably
  */

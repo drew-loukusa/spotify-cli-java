@@ -23,9 +23,9 @@ import java.security.NoSuchAlgorithmException;
 // TODO: Add classes for the 1 remaining authorization flow
 
 class GenericCredentials {
-    private String accessToken = null;
-    private String refreshToken = null;
-    private Integer expiresIn = null;
+    private final String accessToken;
+    private final String refreshToken;
+    private final Integer expiresIn;
     private GenericCredentials(Builder builder) {
         this.accessToken = builder.accessToken;
         this.refreshToken = builder.refreshToken;
@@ -79,8 +79,12 @@ interface IAuthorizationFlow {
     // That is, can the access token given by the flow be refreshed?
     boolean isRefreshable();
     GenericCredentials refresh();
+
+    // Does this auth flow require a Spotify Client Secret to run?
+    boolean requiresClientSecret();
 }
 
+// TODO: Add name field to abstract auth flow
 abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
     protected SpotifyApi spotifyApi;
 
@@ -89,7 +93,7 @@ abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
     }
 
     public static abstract class Builder{
-        private SpotifyApi spotifyApi;
+        private final SpotifyApi spotifyApi;
         protected Builder(SpotifyApi spotifyApi){
             this.spotifyApi = spotifyApi;
         }
@@ -103,13 +107,13 @@ abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
 
 class AuthFlowPKCE extends AbstractAuthorizationFlow {
 
-    private static final Logger logger = (Logger) LoggerFactory.getLogger("spotify-cli-java.AuthFlowPKCE");
+    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.AuthFlowPKCE");
 
-    private String codeVerifier;
-    private String codeChallenge;
-    private String state;
-    private String scope;
-    private boolean showDialog;
+    private final String codeVerifier;
+    private final String codeChallenge;
+    private final String state;
+    private final String scope;
+    private final boolean showDialog;
 
     private AuthFlowPKCE(Builder builder){
         super(builder);
@@ -170,10 +174,6 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
             }
             return new AuthFlowPKCE(this);
         }
-
-        protected Builder self() {
-            return this;
-        }
     }
 
     @Nullable
@@ -186,8 +186,10 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
             credentials = authorizationCodePKCERefreshRequest.execute();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             var msg = e.getMessage();
-            if (msg.equals("Invalid refresh token")){
-                logger.info(msg + ", A full authentication refresh will be required");
+            if (msg.equals("Invalid refresh token") || msg.equals("Refresh token revoked")){
+                msg = msg + ", A full authentication refresh will be required";
+                logger.info(msg);
+                System.err.println(msg);
             }
             else{
                 logger.error(msg);
@@ -246,6 +248,11 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
     }
 
     @Override
+    public boolean requiresClientSecret() {
+        return false;
+    }
+
+    @Override
     public boolean isRefreshable(){
         return true;
     }
@@ -265,6 +272,11 @@ class AuthFlowClientCredentials extends AbstractAuthorizationFlow{
         public AuthFlowClientCredentials build(){
             return new AuthFlowClientCredentials(this);
         }
+    }
+
+    @Override
+    public boolean requiresClientSecret() {
+        return true;
     }
 
     @Override
