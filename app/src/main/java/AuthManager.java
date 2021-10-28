@@ -17,7 +17,7 @@ import java.util.List;
 
 class AuthManager {
 
-    private static final Logger logger = (Logger) LoggerFactory.getLogger("AuthManager");
+    private static final Logger logger = (Logger) LoggerFactory.getLogger("spotify-cli-java.AuthManager");
 
     public enum Authentication {
         SUCCESS,

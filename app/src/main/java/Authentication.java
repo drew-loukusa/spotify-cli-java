@@ -9,6 +9,8 @@ import com.wrapper.spotify.requests.authorization.client_credentials.ClientCrede
 import org.apache.hc.core5.http.ParseException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utility.PKCE;
 
 import java.awt.*;
@@ -101,6 +103,8 @@ abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
 
 class AuthFlowPKCE extends AbstractAuthorizationFlow {
 
+    private static final Logger logger = (Logger) LoggerFactory.getLogger("spotify-cli-java.AuthFlowPKCE");
+
     private String codeVerifier;
     private String codeChallenge;
     private String state;
@@ -153,12 +157,14 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
         public AuthFlowPKCE build(){
             try {
                 this.codeVerifier = PKCE.generateCodeVerifier();
+                logger.debug("PKCE code verifier generated: " + this.codeVerifier);
             } catch (UnsupportedEncodingException e) {
                 e.printStackTrace();
             }
 
             try {
                 this.codeChallenge = PKCE.generateCodeChallenge(this.codeVerifier);
+                logger.debug("PKCE code challenge generated: " + this.codeChallenge);
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
             }
@@ -170,6 +176,7 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
         }
     }
 
+    @Nullable
     @Override
     public GenericCredentials refresh() {
         AuthorizationCodePKCERefreshRequest authorizationCodePKCERefreshRequest = spotifyApi.authorizationCodePKCERefresh()
@@ -178,14 +185,23 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
         try {
             credentials = authorizationCodePKCERefreshRequest.execute();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
-            //e.printStackTrace();
-            System.out.println(e.getMessage());
+            var msg = e.getMessage();
+            if (msg.equals("Invalid refresh token")){
+                logger.info(msg + ", A full authentication refresh will be required");
+            }
+            else{
+                logger.error(msg);
+                e.printStackTrace();
+            }
         }
-        return new GenericCredentials.Builder()
-                .setAccessToken(credentials.getAccessToken())
-                .setRefreshToken(credentials.getRefreshToken())
-                .setExpiresIn(credentials.getExpiresIn())
-                .build();
+        if (credentials != null) {
+            return new GenericCredentials.Builder()
+                    .setAccessToken(credentials.getAccessToken())
+                    .setRefreshToken(credentials.getRefreshToken())
+                    .setExpiresIn(credentials.getExpiresIn())
+                    .build();
+        }
+        else return null;
     }
 
     @Nullable

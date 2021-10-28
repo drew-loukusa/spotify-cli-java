@@ -9,7 +9,7 @@ import java.net.URI;
 
 class SpotifyManager{
 
-    private static final Logger logger = (Logger) LoggerFactory.getLogger("SpotifyManager");
+    private static final Logger logger = (Logger) LoggerFactory.getLogger("spotify-cli-java.SpotifyManager");
 
     private static final String DEFAULT_CLIENT_ID = "e896df19119b4105a6e49585b8013bb9";
     private static final String DEFAULT_REDIRECT_URI = "http://localhost:8080";
@@ -104,7 +104,7 @@ class SpotifyManager{
                 .setClientId(SPOTIFY_CLIENT_ID)
                 .setRedirectUri(spotifyURI);
 
-        if (SPOTIFY_CLIENT_SECRET != null)
+        if (SPOTIFY_CLIENT_SECRET != null && SPOTIFY_CLIENT_SECRET != "")
             spotifyApiBuilder.setClientSecret(SPOTIFY_CLIENT_SECRET);
 
         var spotifyApi = spotifyApiBuilder.build();
@@ -135,8 +135,8 @@ class SpotifyManager{
 
         // TODO: Configure token caching and token refreshing via flags, OR via config file
         var authManager = new AuthManager.Builder(authFlow, spotifyApi)
-                .disableTokenCaching()
-                .disableRefresh()
+                //.disableTokenCaching()
+                //.disableRefresh()
                 .build();
 
         if (authManager.authenticateSpotifyInstance() == AuthManager.Authentication.FAIL){
