@@ -22,14 +22,42 @@ import java.security.NoSuchAlgorithmException;
 // TODO: Add logging to PKCE (and the other future flows)
 // TODO: Add classes for the 1 remaining authorization flow
 
+interface IAuthorizationFlow {
+    GenericCredentials authorize();
+
+    SpotifyApi getSpotify();
+
+    // Can this authorization flow be refreshed?
+    // That is, can the access token given by the flow be refreshed?
+    boolean isRefreshable();
+
+    GenericCredentials refresh();
+
+    // Does this auth flow require a Spotify Client Secret to run?
+    boolean requiresClientSecret();
+}
+
 class GenericCredentials {
     private final String accessToken;
     private final String refreshToken;
     private final Integer expiresIn;
+
     private GenericCredentials(Builder builder) {
         this.accessToken = builder.accessToken;
         this.refreshToken = builder.refreshToken;
         this.expiresIn = builder.expiresIn;
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public String getRefreshToken() {
+        return refreshToken;
+    }
+
+    public Integer getExpiresIn() {
+        return expiresIn;
     }
 
     public static class Builder {
@@ -57,31 +85,6 @@ class GenericCredentials {
             return new GenericCredentials(this);
         }
     }
-
-    public String getAccessToken(){
-        return accessToken;
-    }
-
-    public String getRefreshToken(){
-        return refreshToken;
-    }
-
-    public Integer getExpiresIn(){
-        return expiresIn;
-    }
-}
-
-interface IAuthorizationFlow {
-    GenericCredentials authorize();
-    SpotifyApi getSpotify();
-
-    // Can this authorization flow be refreshed?
-    // That is, can the access token given by the flow be refreshed?
-    boolean isRefreshable();
-    GenericCredentials refresh();
-
-    // Does this auth flow require a Spotify Client Secret to run?
-    boolean requiresClientSecret();
 }
 
 // TODO: Add name field to abstract auth flow
@@ -92,16 +95,17 @@ abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
         this.spotifyApi = builder.spotifyApi;
     }
 
-    public static abstract class Builder{
-        private final SpotifyApi spotifyApi;
-        protected Builder(SpotifyApi spotifyApi){
-            this.spotifyApi = spotifyApi;
-        }
+    @Override
+    public SpotifyApi getSpotify() {
+        return spotifyApi;
     }
 
-    @Override
-    public SpotifyApi getSpotify(){
-        return spotifyApi;
+    public static abstract class Builder {
+        private final SpotifyApi spotifyApi;
+
+        protected Builder(SpotifyApi spotifyApi) {
+            this.spotifyApi = spotifyApi;
+        }
     }
 }
 
@@ -115,65 +119,17 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
     private final String scope;
     private final boolean showDialog;
 
-    private AuthFlowPKCE(Builder builder){
+    private AuthFlowPKCE(Builder builder) {
         super(builder);
         codeVerifier = builder.codeVerifier;
         codeChallenge = builder.codeChallenge;
         this.state = builder.state;
-        this.scope  = builder.scope;
+        this.scope = builder.scope;
         this.showDialog = builder.showDialog;
     }
 
-    public SpotifyApi getSpotify(){
+    public SpotifyApi getSpotify() {
         return super.spotifyApi;
-    }
-
-    // TODO: USE STATE when dealing with code getting, token getting etc. Check the guides etc.
-    public static class Builder extends AbstractAuthorizationFlow.Builder {
-        private String codeVerifier;
-        private String codeChallenge;
-
-        private String state = "";
-        private String scope = "";
-        private boolean showDialog = false;
-
-        public Builder(@NotNull SpotifyApi spotifyApi){
-            super(spotifyApi);
-        }
-
-        // Might not need to expose this one to end users, since it might make sense to generate state strings
-        // IN the Auth classes for end users... Or maybe leave this here, but provide default state string generation
-        public Builder state(String state){
-            this.state = state;
-            return this;
-        }
-
-        public Builder scope(String scope){
-            this.scope = scope;
-            return this;
-        }
-
-        public Builder showDialog(boolean showDialog){
-            this.showDialog = showDialog;
-            return this;
-        }
-
-        public AuthFlowPKCE build(){
-            try {
-                this.codeVerifier = PKCE.generateCodeVerifier();
-                logger.debug("PKCE code verifier generated: " + this.codeVerifier);
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-            }
-
-            try {
-                this.codeChallenge = PKCE.generateCodeChallenge(this.codeVerifier);
-                logger.debug("PKCE code challenge generated: " + this.codeChallenge);
-            } catch (NoSuchAlgorithmException e) {
-                e.printStackTrace();
-            }
-            return new AuthFlowPKCE(this);
-        }
     }
 
     @Nullable
@@ -186,12 +142,11 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
             credentials = authorizationCodePKCERefreshRequest.execute();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             var msg = e.getMessage();
-            if (msg.equals("Invalid refresh token") || msg.equals("Refresh token revoked")){
+            if (msg.equals("Invalid refresh token") || msg.equals("Refresh token revoked")) {
                 msg = msg + ", A full authentication refresh will be required";
                 logger.info(msg);
                 System.err.println(msg);
-            }
-            else{
+            } else {
                 logger.error(msg);
                 e.printStackTrace();
             }
@@ -202,8 +157,7 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
                     .setRefreshToken(credentials.getRefreshToken())
                     .setExpiresIn(credentials.getExpiresIn())
                     .build();
-        }
-        else return null;
+        } else return null;
     }
 
     @Nullable
@@ -223,8 +177,7 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }
-        else{
+        } else {
             System.out.println("Please navigate to this url in a browser and authorize the application:");
             System.out.println("URI: " + uri.toString());
         }
@@ -253,25 +206,63 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
     }
 
     @Override
-    public boolean isRefreshable(){
+    public boolean isRefreshable() {
         return true;
     }
-}
 
-class AuthFlowClientCredentials extends AbstractAuthorizationFlow{
+    // TODO: USE STATE when dealing with code getting, token getting etc. Check the guides etc.
+    public static class Builder extends AbstractAuthorizationFlow.Builder {
+        private String codeVerifier;
+        private String codeChallenge;
 
-    private AuthFlowClientCredentials(Builder builder){
-        super(builder);
-    }
+        private String state = "";
+        private String scope = "";
+        private boolean showDialog = false;
 
-    public static class Builder extends AbstractAuthorizationFlow.Builder{
-        public Builder(@NotNull SpotifyApi spotifyApi){
+        public Builder(@NotNull SpotifyApi spotifyApi) {
             super(spotifyApi);
         }
 
-        public AuthFlowClientCredentials build(){
-            return new AuthFlowClientCredentials(this);
+        // Might not need to expose this one to end users, since it might make sense to generate state strings
+        // IN the Auth classes for end users... Or maybe leave this here, but provide default state string generation
+        public Builder state(String state) {
+            this.state = state;
+            return this;
         }
+
+        public Builder scope(String scope) {
+            this.scope = scope;
+            return this;
+        }
+
+        public Builder showDialog(boolean showDialog) {
+            this.showDialog = showDialog;
+            return this;
+        }
+
+        public AuthFlowPKCE build() {
+            try {
+                this.codeVerifier = PKCE.generateCodeVerifier();
+                logger.debug("PKCE code verifier generated: " + this.codeVerifier);
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                this.codeChallenge = PKCE.generateCodeChallenge(this.codeVerifier);
+                logger.debug("PKCE code challenge generated: " + this.codeChallenge);
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace();
+            }
+            return new AuthFlowPKCE(this);
+        }
+    }
+}
+
+class AuthFlowClientCredentials extends AbstractAuthorizationFlow {
+
+    private AuthFlowClientCredentials(Builder builder) {
+        super(builder);
     }
 
     @Override
@@ -285,12 +276,12 @@ class AuthFlowClientCredentials extends AbstractAuthorizationFlow{
     }
 
     @Override
-    public GenericCredentials refresh(){
+    public GenericCredentials refresh() {
         return null;
     }
 
     @Override
-    public GenericCredentials authorize(){
+    public GenericCredentials authorize() {
         ClientCredentialsRequest clientCredentialsRequest = spotifyApi.clientCredentials().build();
 
         ClientCredentials credentials = null;
@@ -304,5 +295,15 @@ class AuthFlowClientCredentials extends AbstractAuthorizationFlow{
                 .setAccessToken(credentials.getAccessToken())
                 .setExpiresIn(credentials.getExpiresIn())
                 .build();
+    }
+
+    public static class Builder extends AbstractAuthorizationFlow.Builder {
+        public Builder(@NotNull SpotifyApi spotifyApi) {
+            super(spotifyApi);
+        }
+
+        public AuthFlowClientCredentials build() {
+            return new AuthFlowClientCredentials(this);
+        }
     }
 }

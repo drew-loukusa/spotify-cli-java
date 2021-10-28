@@ -17,39 +17,23 @@ import java.util.List;
 class AuthManager {
 
     private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.AuthManager");
-
-    public enum Authentication {
-        SUCCESS,
-        FAIL
-    }
-
-    public enum CacheState{
-        CACHE_DNE,
-        ACCESS_TOKEN_EXPIRED,
-        ACCESS_TOKEN_VALID,
-        ACCESS_TOKEN_INVALID,
-    }
-
-    // Provide default, but don't make final so path can be changed by user
-    private String TOKEN_CACHE_PATH = "token_cache.txt";
-
     // Fields that must be set at object instantiation
     private final SpotifyApi spotifyApi;
     private final AbstractAuthorizationFlow authorizationFlow;
     private final boolean disableTokenRefresh;
     private final boolean disableTokenCaching;
-
     private final boolean tokenRefreshEnabled;
     private final boolean tokenCachingEnabled;
-
+    // Provide default, but don't make final so path can be changed by user
+    private String TOKEN_CACHE_PATH = "token_cache.txt";
     // Fields that are set and managed after object instantiation (Thus are not in builder)
     private String accessToken = "";
     private String refreshToken = "";
     private String accessDuration = "";
     private String accessCreationTimeStamp = "";
 
-    private AuthManager(Builder builder){
-        if (!builder.tokenCacheFilePath.equals("")){
+    private AuthManager(Builder builder) {
+        if (!builder.tokenCacheFilePath.equals("")) {
             TOKEN_CACHE_PATH = builder.tokenCacheFilePath;
         }
         this.authorizationFlow = builder.authorizationFlow;
@@ -61,45 +45,7 @@ class AuthManager {
         this.tokenRefreshEnabled = !this.disableTokenRefresh;
     }
 
-    public static class Builder {
-        private String tokenCacheFilePath = "";
-        private final SpotifyApi spotifyApi;
-        private final AbstractAuthorizationFlow authorizationFlow;
-        private boolean disableTokenRefresh = true;
-        private boolean disableTokenCaching = true;
-        public Builder(@NotNull AbstractAuthorizationFlow authorizationFlow, @NotNull SpotifyApi spotifyApi){
-            this.authorizationFlow = authorizationFlow;
-            this.spotifyApi = spotifyApi;
-        }
-
-        public Builder tokenCacheFilePath(String tokenCacheFilePath){
-            this.tokenCacheFilePath = tokenCacheFilePath;
-            return this;
-        }
-
-        /**
-         * Disables token refreshing: I.E. If a cached access token is invalid or expired, the app will not try
-         * to refresh it. Instead, a new token is acquired through the configured authentication flow
-         */
-        public Builder disableTokenRefresh(boolean bool){
-            this.disableTokenRefresh = bool;
-            return this;
-        }
-
-        /**
-         * Disables token caching. NOTE: Also disables token refresh, since token refresh relies on the token cache
-         */
-        public Builder disableTokenCaching(boolean bool){
-            this.disableTokenCaching = bool;
-            return this;
-        }
-
-        public AuthManager build(){
-            return new AuthManager(this);
-        }
-    }
-
-    public Authentication authenticateSpotifyInstance(){
+    public Authentication authenticateSpotifyInstance() {
 
         if (disableTokenCaching) {
             logger.info("Token caching disabled");
@@ -108,7 +54,7 @@ class AuthManager {
         }
         if (disableTokenRefresh) {
             logger.info("Token refresh disabled");
-        } else{
+        } else {
             logger.info("Token refresh enabled");
         }
 
@@ -161,7 +107,7 @@ class AuthManager {
             cacheTokensToFile();
         setTokensOnSpotifyInstance();
         var pair = testSpotifyConnection();
-        if (pair.getFirst()){
+        if (pair.getFirst()) {
             logger.info("Successfully retrieved a new access token from Spotify");
             return Authentication.SUCCESS;
         }
@@ -170,7 +116,7 @@ class AuthManager {
         return Authentication.FAIL;
     }
 
-    private void cacheTokensToFile(){
+    private void cacheTokensToFile() {
         try (var fileWriter = new FileWriter(TOKEN_CACHE_PATH)) {
             fileWriter.write("ACCESS_TOKEN\t" + accessToken + "\n");
             fileWriter.write("REFRESH_TOKEN\t" + refreshToken + "\n");
@@ -210,13 +156,13 @@ class AuthManager {
      * Using authorizationFlow, attempts to refresh the existing access token using the existing refresh token.
      * Sets accessToken, refreshToken, accessDuration, and accessCreationTimeStamp if successful.
      * NOTE: ONLY WORKS if the authorization flow type in use supports token refreshing, AND token caching is enabled.
-     *
+     * <p>
      * NOTE: Call authorizationFlow.isRefreshable() to check if an auth flow supports refreshing before calling this
      * method.
      *
      * @return Success value as a boolean indicating if the auth flow was able to refresh the access token.
      */
-    private boolean authRefresh(){
+    private boolean authRefresh() {
         GenericCredentials credentials = authorizationFlow.refresh();
         if (credentials == null)
             return false;
@@ -234,7 +180,7 @@ class AuthManager {
      * and accessCreationTimeStamp. Depending on what authorization flow type is being used,
      * the end user may be required to sign in.
      */
-    private void fullAuthRefresh(){
+    private void fullAuthRefresh() {
         GenericCredentials credentials = authorizationFlow.authorize();
 
         accessToken = credentials.getAccessToken();
@@ -245,7 +191,7 @@ class AuthManager {
         //this.accessCreationTimeStamp =
     }
 
-    private void setTokensOnSpotifyInstance(){
+    private void setTokensOnSpotifyInstance() {
         spotifyApi.setAccessToken(this.accessToken);
         // Not all auth flows return a refresh token, namely, Implicit Grand flow and Client Credentials flow
         if (this.authorizationFlow.isRefreshable() && this.refreshToken != null && !this.refreshToken.equals("")) {
@@ -253,7 +199,7 @@ class AuthManager {
         }
     }
 
-    private Pair<Boolean, String> testSpotifyConnection(){
+    private Pair<Boolean, String> testSpotifyConnection() {
         // Test token actually works. ID = Weezer , could probably switch to something else
         GetArtistRequest getArtistRequest = spotifyApi.getArtist("3jOstUTkEu2JkjvRdBA5Gu")
                 .build();
@@ -264,5 +210,56 @@ class AuthManager {
             return new Pair<>(false, e.getMessage());
         }
         return new Pair<>(true, "");
+    }
+
+    public enum Authentication {
+        SUCCESS,
+        FAIL
+    }
+
+    public enum CacheState {
+        CACHE_DNE,
+        ACCESS_TOKEN_EXPIRED,
+        ACCESS_TOKEN_VALID,
+        ACCESS_TOKEN_INVALID,
+    }
+
+    public static class Builder {
+        private final SpotifyApi spotifyApi;
+        private final AbstractAuthorizationFlow authorizationFlow;
+        private String tokenCacheFilePath = "";
+        private boolean disableTokenRefresh = true;
+        private boolean disableTokenCaching = true;
+
+        public Builder(@NotNull AbstractAuthorizationFlow authorizationFlow, @NotNull SpotifyApi spotifyApi) {
+            this.authorizationFlow = authorizationFlow;
+            this.spotifyApi = spotifyApi;
+        }
+
+        public Builder tokenCacheFilePath(String tokenCacheFilePath) {
+            this.tokenCacheFilePath = tokenCacheFilePath;
+            return this;
+        }
+
+        /**
+         * Disables token refreshing: I.E. If a cached access token is invalid or expired, the app will not try
+         * to refresh it. Instead, a new token is acquired through the configured authentication flow
+         */
+        public Builder disableTokenRefresh(boolean bool) {
+            this.disableTokenRefresh = bool;
+            return this;
+        }
+
+        /**
+         * Disables token caching. NOTE: Also disables token refresh, since token refresh relies on the token cache
+         */
+        public Builder disableTokenCaching(boolean bool) {
+            this.disableTokenCaching = bool;
+            return this;
+        }
+
+        public AuthManager build() {
+            return new AuthManager(this);
+        }
     }
 }

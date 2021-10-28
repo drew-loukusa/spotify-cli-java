@@ -11,8 +11,8 @@
  */
 
 /*
-* Modifications for use in spotify-cli-java by drew-loukusa, 2021
-*/
+ * Modifications for use in spotify-cli-java by drew-loukusa, 2021
+ */
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -30,16 +30,39 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class CallbackServer {
-    protected static HttpServer server;
-    private final authServerHandler requestHandler = new authServerHandler();
     private static final Logger logger
             = (Logger) LoggerFactory.getLogger("spotify-cli-java.CallbackServer");
+    protected static HttpServer server;
+    private final authServerHandler requestHandler = new authServerHandler();
+
+    public CallbackServer() {
+
+        try {
+            server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8080), 0);
+            server.createContext("/", requestHandler);
+            ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(5, new NamedThreadFactory("callback"));
+            server.setExecutor(threadPoolExecutor);
+            server.start();
+        } catch (IOException e) {
+            //Main.showException(e);
+        }
+
+    }
+
+    public String getAuthCode() {
+        return requestHandler.fetchAuthCode();
+    }
+
+    public void destroy() {
+        logger.info("Destroying the callback server");
+        server.stop(0);
+    }
 
     static public class authServerHandler implements HttpHandler {
-        private final CountDownLatch tokenLatch = new CountDownLatch(1);
-        private String authCode;
         private static final Logger logger
                 = (Logger) LoggerFactory.getLogger("]spotify-cli-java.CallbackServer.Builder");
+        private final CountDownLatch tokenLatch = new CountDownLatch(1);
+        private String authCode;
 
         @Override
         public void handle(HttpExchange httpExchange) throws IOException {
@@ -177,29 +200,6 @@ public class CallbackServer {
             String threadName = name + "-" + threadNo.incrementAndGet();
             return new Thread(r, threadName);
         }
-    }
-
-    public CallbackServer() {
-
-        try {
-            server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8080), 0);
-            server.createContext("/", requestHandler);
-            ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(5, new NamedThreadFactory("callback"));
-            server.setExecutor(threadPoolExecutor);
-            server.start();
-        } catch (IOException e) {
-            //Main.showException(e);
-        }
-
-    }
-
-    public String getAuthCode() {
-        return requestHandler.fetchAuthCode();
-    }
-
-    public void destroy() {
-        logger.info("Destroying the callback server");
-        server.stop(0);
     }
 
 }

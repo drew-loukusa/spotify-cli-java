@@ -66,9 +66,9 @@ class FollowCommand implements Callable<Integer> {
 class ListCommand implements Callable<Integer> {
 
     @Parameters(
-        index = "0",
-        description = "The type of saved/followed item to list. " +
-                      "Accepted types are: 'playlist', 'artist', 'album', 'show', 'episode', 'track'"
+            index = "0",
+            description = "The type of saved/followed item to list. " +
+                    "Accepted types are: 'playlist', 'artist', 'album', 'show', 'episode', 'track'"
     )
     private String itemType;
 
@@ -105,7 +105,6 @@ class InfoCommand implements Callable<Integer> {
 
     @Parameters(index = "1", description = "The ID of item to retrieve info for")
     private String itemID;
-
 
 
     InfoCommand() throws IOException, ParseException, SpotifyWebApiException {

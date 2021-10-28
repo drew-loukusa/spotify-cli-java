@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 
-class SpotifyManager{
+class SpotifyManager {
     private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.SpotifyManager");
 
     // TODO: Move defaults out of code, or at least out of THIS Code
@@ -50,7 +50,7 @@ class SpotifyManager{
     private final boolean disableTokenCaching;
     private final boolean disableTokenRefresh;
 
-    private SpotifyManager(Builder builder){
+    private SpotifyManager(Builder builder) {
         // If user did not set ENV vars, or create .env file, use defaults
         // For obvious reasons, there is no default for CLIENT_SECRET
         this.clientID = setVar(
@@ -101,6 +101,102 @@ class SpotifyManager{
         );
     }
 
+    /**
+     * A method for choosing the "most important value" from a list of values.
+     *
+     * @param defaultValue Is returned if all vars in 'values' are null
+     * @param values       Values are in decreasing order of importance. Earlier values take precedence over later values
+     * @return The chosen value.
+     */
+    private String setVar(String varName, String defaultValue, String... values) {
+        String chosenValue = null;
+        for (String value : values) {
+            if (value != null && !value.equals("null")) {
+                chosenValue = value;
+                break;
+            }
+        }
+        String message = varName;
+        if (chosenValue == null) {
+            chosenValue = defaultValue;
+            message = message + " (default)";
+        }
+        message = message + ": " + chosenValue;
+        if (chosenValue != null) {
+            logger.info(message);
+        } else {
+            logger.info(varName + ": Not assigned a value");
+        }
+        return chosenValue;
+    }
+
+    @Nullable
+    public SpotifyApi CreateSession() {
+        var logMsg = "%s is null. Cannot create spotify session.";
+        var userErrorMsg = "ERROR: No configuration found for %s; cannot create Spotify session. " +
+                "Please set a configuration via a .env file, via an environment variable, or via option/flag.";
+        if (redirectURI == null) {
+            logger.error(String.format(logMsg, "Redirect URI"));
+            System.err.println(String.format(userErrorMsg, "SPOTIFY_REDIRECT_URI"));
+            return null;
+        }
+        final URI spotifyURI = SpotifyHttpManager.makeUri(redirectURI);
+
+        if (clientID == null) {
+            logger.error(String.format(logMsg, "Client ID"));
+            System.err.println(String.format(userErrorMsg, "SPOTIFY_CLIENT_ID"));
+            return null;
+        }
+
+        var spotifyApiBuilder = new SpotifyApi.Builder()
+                .setClientId(clientID)
+                .setRedirectUri(spotifyURI);
+
+        var spotifyApi = spotifyApiBuilder.build();
+
+        AbstractAuthorizationFlow authFlow = null;
+        // NOTE: More cases coming soon :)
+        switch (authFlowType) {
+            case "PKCE":
+                logger.info("PKCE Auth flow selected");
+                var authFlowBuilder = new AuthFlowPKCE.Builder(spotifyApi)
+                        .showDialog(false);
+                if (authScopes != null)
+                    authFlowBuilder.scope(authScopes);
+                authFlow = authFlowBuilder.build();
+                break;
+
+            case "ClientCredentials":
+                logger.info("Client Credentials flow selected");
+                authFlow = new AuthFlowClientCredentials.Builder(spotifyApi)
+                        .build();
+                break;
+            default:
+                logger.error("No auth flow selected");
+        }
+
+        if (clientSecret == null && authFlow.requiresClientSecret()) {
+            logger.error(String.format(logMsg, "Client Secret"));
+            logger.error("Current selected auth flow requires client secret to be set");
+            System.err.println(String.format(userErrorMsg, "SPOTIFY_CLIENT_SECRET"));
+            System.err.println("Current selected auth flow requires client secret to be set");
+            return null;
+        } else if (clientSecret != null)
+            spotifyApiBuilder.setClientSecret(clientSecret);
+
+        assert authFlow != null;
+        var authManager = new AuthManager.Builder(authFlow, spotifyApi)
+                .disableTokenCaching(disableTokenCaching)
+                .disableTokenRefresh(disableTokenRefresh)
+                .build();
+
+        if (authManager.authenticateSpotifyInstance() == AuthManager.Authentication.FAIL) {
+            return null;
+        }
+
+        return spotifyApi;
+    }
+
     public static class Builder {
         private String clientID;
         private String clientSecret;
@@ -110,7 +206,8 @@ class SpotifyManager{
         private Boolean disableTokenCaching = null;
         private Boolean disableTokenRefresh = null;
 
-        public Builder(){}
+        public Builder() {
+        }
 
         public Builder clientID(String clientID) {
             this.clientID = clientID;
@@ -127,12 +224,12 @@ class SpotifyManager{
             return this;
         }
 
-        public Builder authScopes(String authScopes){
+        public Builder authScopes(String authScopes) {
             this.authScopes = authScopes;
             return this;
         }
 
-        public Builder authFlowType(String authFlowType){
+        public Builder authFlowType(String authFlowType) {
             this.authFlowType = authFlowType;
             return this;
         }
@@ -147,106 +244,8 @@ class SpotifyManager{
             return this;
         }
 
-        public SpotifyManager build(){
+        public SpotifyManager build() {
             return new SpotifyManager(this);
         }
-    }
-
-    /**
-     * A method for choosing the "most important value" from a list of values.
-     * @param defaultValue Is returned if all vars in 'values' are null
-     * @param values Values are in decreasing order of importance. Earlier values take precedence over later values
-     * @return The chosen value.
-     */
-    private String setVar(String varName, String defaultValue, String ... values){
-        String chosenValue = null;
-        for (String value: values) {
-            if (value != null && !value.equals("null")) {
-                chosenValue = value;
-                break;
-            }
-        }
-        String message = varName;
-        if (chosenValue == null){
-            chosenValue = defaultValue;
-            message = message + " (default)";
-        }
-        message = message + ": "+ chosenValue;
-        if (chosenValue != null) {
-            logger.info(message);
-        }
-        else{
-            logger.info(varName + ": Not assigned a value");
-        }
-        return chosenValue;
-    }
-
-    @Nullable
-    public SpotifyApi CreateSession(){
-        var logMsg = "%s is null. Cannot create spotify session.";
-        var userErrorMsg =  "ERROR: No configuration found for %s; cannot create Spotify session. " +
-                "Please set a configuration via a .env file, via an environment variable, or via option/flag.";
-        if (redirectURI == null) {
-            logger.error(String.format(logMsg, "Redirect URI"));
-            System.err.println(String.format(userErrorMsg, "SPOTIFY_REDIRECT_URI"));
-            return null;
-        }
-        final URI spotifyURI = SpotifyHttpManager.makeUri(redirectURI);
-
-        if (clientID == null){
-            logger.error(String.format(logMsg, "Client ID"));
-            System.err.println(String.format(userErrorMsg, "SPOTIFY_CLIENT_ID"));
-            return null;
-        }
-
-        var spotifyApiBuilder = new SpotifyApi.Builder()
-                .setClientId(clientID)
-                .setRedirectUri(spotifyURI);
-
-        var spotifyApi = spotifyApiBuilder.build();
-
-        AbstractAuthorizationFlow authFlow = null;
-        // NOTE: More cases coming soon :)
-        switch (authFlowType){
-            case "PKCE":
-                logger.info("PKCE Auth flow selected");
-                var authFlowBuilder = new AuthFlowPKCE.Builder(spotifyApi)
-                        .showDialog(false);
-                if (authScopes != null)
-                    authFlowBuilder.scope(authScopes);
-                authFlow = authFlowBuilder.build();
-                break;
-
-            case "ClientCredentials":
-                logger.info("Client Credentials flow selected");
-                authFlow = new AuthFlowClientCredentials.Builder(spotifyApi)
-                        .build();
-                break;
-            default:
-               logger.error("No auth flow selected");
-        }
-
-        if (clientSecret == null && authFlow.requiresClientSecret()){
-            logger.error(String.format(logMsg, "Client Secret"));
-            logger.error("Current selected auth flow requires client secret to be set");
-            System.err.println(String.format(userErrorMsg, "SPOTIFY_CLIENT_SECRET"));
-            System.err.println("Current selected auth flow requires client secret to be set");
-            return null;
-        }
-
-        else if (clientSecret != null)
-            spotifyApiBuilder.setClientSecret(clientSecret);
-
-        assert authFlow != null;
-        var authManager = new AuthManager.Builder(authFlow, spotifyApi)
-                .disableTokenCaching(disableTokenCaching)
-                .disableTokenRefresh(disableTokenRefresh)
-                .build();
-
-        if (authManager.authenticateSpotifyInstance() == AuthManager.Authentication.FAIL){
-            return null;
-        }
-
-        return spotifyApi;
     }
 }
