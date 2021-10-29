@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 
 
 interface IAuthorizationFlow {
@@ -41,11 +42,13 @@ class GenericCredentials {
     private final String accessToken;
     private final String refreshToken;
     private final Integer expiresIn;
+    private final String accessCreationTimeStamp;
 
     private GenericCredentials(Builder builder) {
         this.accessToken = builder.accessToken;
         this.refreshToken = builder.refreshToken;
         this.expiresIn = builder.expiresIn;
+        this.accessCreationTimeStamp = builder.accessCreationTimeStamp;
     }
 
     public String getAccessToken() {
@@ -60,11 +63,25 @@ class GenericCredentials {
         return expiresIn;
     }
 
+    public String getAccessCreationTimeStamp() { return accessCreationTimeStamp; }
+
+    public static String getTimeStamp(){
+        LocalDateTime now = LocalDateTime.now();
+        int year = now.getYear();
+        int month = now.getMonthValue();
+        int day = now.getDayOfMonth();
+        int hour = now.getHour();
+        int minute = now.getMinute();
+        int second = now.getSecond();
+        return String.format("%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
+    }
+
     public static class Builder {
 
         private String accessToken;
         private String refreshToken;
         private Integer expiresIn;
+        private String accessCreationTimeStamp = getTimeStamp();
 
         public Builder setAccessToken(String accessToken) {
             this.accessToken = accessToken;
@@ -78,6 +95,18 @@ class GenericCredentials {
 
         public Builder setExpiresIn(Integer expiresIn) {
             this.expiresIn = expiresIn;
+            return this;
+        }
+
+        /**
+         * NOTE: accessCreationTimeStamp is AUTOMATICALLY set by the class when a GenericCredentials object is created.
+         * You can override with your own timestamp, but it has to be in the following format:
+         * FORMAT: %d-%02d-%02d %02d:%02d:%02d
+         * EXAMPLE DATE: 2021-10-29 14:02:16
+         */
+        public Builder setAccessCreationTimeStamp(String accessCreationTimeStamp){
+            // TODO: validate format of string here, raise exception?
+            this.accessCreationTimeStamp = accessCreationTimeStamp;
             return this;
         }
 

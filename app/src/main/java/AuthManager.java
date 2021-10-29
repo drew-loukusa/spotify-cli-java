@@ -26,11 +26,6 @@ class AuthManager {
     private final boolean tokenCachingEnabled;
     // Provide default, but don't make final so path can be changed by user
     private String TOKEN_CACHE_PATH = "token_cache.txt";
-    // Fields that are set and managed after object instantiation (Thus are not in builder)
-    private String accessToken = "";
-    private String refreshToken = "";
-    private String accessDuration = "";
-    private String accessCreationTimeStamp = "";
 
     private AuthManager(Builder builder) {
         if (!builder.tokenCacheFilePath.equals("")) {
@@ -45,8 +40,7 @@ class AuthManager {
         this.tokenRefreshEnabled = !this.disableTokenRefresh;
     }
 
-    public Authentication authenticateSpotifyInstance() {
-
+    public AuthStatus authenticateSpotifyInstance() {
         if (disableTokenCaching) {
             logger.info("Token caching disabled");
         } else {
@@ -58,16 +52,20 @@ class AuthManager {
             logger.info("Token refresh enabled");
         }
 
-        // Try to load tokens from the cache
-        if (tokenCachingEnabled) {
-            var cacheState = loadTokensFromCache();
-            if (cacheState == CacheState.ACCESS_TOKEN_VALID) {
-                setTokensOnSpotifyInstance();
+        // Check the state of the cache
+        var loadPair = loadTokensFromCache();
+        AuthManager.CacheState cacheState = loadPair.getFirst();
+        GenericCredentials genericCredentials = loadPair.getSecond();
 
-                //If connection is good, tokens are good
+        // Try to use tokens from the cache
+        if (tokenCachingEnabled) {
+            if (cacheState == CacheState.ACCESS_TOKEN_VALID) {
+                setTokensOnSpotifyInstance(genericCredentials);
+
+                // Test to see if the cached access token is still valid
                 var pair = testSpotifyConnection();
                 if (pair.getFirst()) {
-                    return Authentication.SUCCESS;
+                    return AuthStatus.SUCCESS;
                 }
 
                 logger.info(pair.getSecond());
@@ -82,120 +80,116 @@ class AuthManager {
             }
         }
 
-        // Try to refresh the access token, provided that selected auth flow supports refresh and the token cache exists
-        if (tokenCachingEnabled && tokenRefreshEnabled) {
-            var cacheState = loadTokensFromCache();
-            if (authorizationFlow.isRefreshable() && cacheState != CacheState.CACHE_DNE) {
-                if (authRefresh()) {
-                    setTokensOnSpotifyInstance();
+        /*
+         * Try to refresh the access token, provided the authorization flow type in use supports token refreshing,
+         * token caching is enabled, and the token cache exists.
+         *
+         * Sets accessToken, refreshToken, accessDuration, and accessCreationTimeStamp if successful.
+         *
+         * NOTE: Always call authorizationFlow.isRefreshable() to check if an auth flow supports refreshing before
+         * trying to invoke refresh on it
+         */
+        if (tokenCachingEnabled
+                && tokenRefreshEnabled
+                && authorizationFlow.isRefreshable()
+                && cacheState != CacheState.CACHE_DNE) {
 
-                    var pair = testSpotifyConnection();
-                    if (pair.getFirst()) {
-                        logger.info("Successfully refreshed the access token");
-                        return Authentication.SUCCESS;
-                    }
+            genericCredentials = authorizationFlow.refresh();
+            if (genericCredentials != null) {
+                setTokensOnSpotifyInstance(genericCredentials);
+
+                var pair = testSpotifyConnection();
+                if (pair.getFirst()) {
                     if (tokenCachingEnabled)
-                        cacheTokensToFile();
+                        cacheTokensToFile(genericCredentials);
+                    logger.info("Successfully refreshed the access token");
+                    return AuthStatus.SUCCESS;
                 }
             }
         }
 
         // If valid tokens could not be retrieved any other way, require a full refresh
-        // Typically this means the user will have to sign in
-        fullAuthRefresh();
+        // This may mean the end user will have to sign in
+        genericCredentials = authorizationFlow.authorize();
+
         if (tokenCachingEnabled)
-            cacheTokensToFile();
-        setTokensOnSpotifyInstance();
+            cacheTokensToFile(genericCredentials);
+
+        setTokensOnSpotifyInstance(genericCredentials);
         var pair = testSpotifyConnection();
         if (pair.getFirst()) {
             logger.info("Successfully retrieved a new access token from Spotify");
-            return Authentication.SUCCESS;
+            return AuthStatus.SUCCESS;
         }
 
         logger.info(pair.getSecond());
-        return Authentication.FAIL;
+        return AuthStatus.FAIL;
     }
 
-    private void cacheTokensToFile() {
+    private void cacheTokensToFile(GenericCredentials genericCredentials) {
+        String accessToken = genericCredentials.getAccessToken();
+        String refreshToken = genericCredentials.getRefreshToken();
+        String accessDuration = genericCredentials.getExpiresIn().toString();
+        String accessCreationTimeStamp = genericCredentials.getAccessCreationTimeStamp();
         try (var fileWriter = new FileWriter(TOKEN_CACHE_PATH)) {
             fileWriter.write("ACCESS_TOKEN\t" + accessToken + "\n");
             fileWriter.write("REFRESH_TOKEN\t" + refreshToken + "\n");
             fileWriter.write("ACCESS_DURATION_SECONDS\t" + accessDuration + "\n");
             fileWriter.write("ACCESS_CREATION_TIMESTAMP\t" + accessCreationTimeStamp + "\n");
-            fileWriter.write("ACCESS_CREATION_FORMAT\tHH:MM:SS\n");
+            fileWriter.write("ACCESS_CREATION_FORMAT\tYY:MM:DD:HH:MM:SS\n");
             logger.info(String.format("Cached tokens to file with name \"%s\"", TOKEN_CACHE_PATH));
+            logger.debug("Wrote access token: " + accessToken);
+            logger.debug("Wrote refresh token: " + refreshToken);
+            logger.debug("Wrote access token duration: " + accessDuration);
+            logger.debug("Wrote access token timestamp: " + accessCreationTimeStamp);
         } catch (IOException e) {
             logger.error(e.getMessage());
         }
     }
 
-    private CacheState loadTokensFromCache() {
+    private Pair<CacheState, GenericCredentials> loadTokensFromCache() {
         // If cache file has not been created yet
         if (Files.notExists(Paths.get(TOKEN_CACHE_PATH))) {
-            return CacheState.CACHE_DNE;
+            return new Pair<>(CacheState.CACHE_DNE, null);
         }
 
+        GenericCredentials genericCredentials = null;
         try {
             List<String> lines = Files.readAllLines(Paths.get(TOKEN_CACHE_PATH));
-            accessToken = lines.get(0).split("\t")[1];
-            refreshToken = lines.get(1).split("\t")[1];
-            accessDuration = lines.get(2).split("\t")[1];
-            accessCreationTimeStamp = lines.get(3).split("\t")[1];
+            String accessToken = lines.get(0).split("\t")[1];
+            String refreshToken = lines.get(1).split("\t")[1];
+            String accessDuration = lines.get(2).split("\t")[1];
+            String accessCreationTimeStamp = lines.get(3).split("\t")[1];
             logger.info(String.format("Loaded tokens from file with name \"%s\"", TOKEN_CACHE_PATH));
+            logger.debug("Loaded access token: " + accessToken);
+            logger.debug("Loaded refresh token: " + refreshToken);
+            logger.debug("Loaded access token duration: " + accessDuration);
+            logger.debug("Loaded access token timestamp: " + accessCreationTimeStamp);
+
+            genericCredentials = new GenericCredentials.Builder()
+                    .setAccessToken(accessToken)
+                    .setRefreshToken(refreshToken)
+                    .setExpiresIn(Integer.valueOf(accessDuration))
+                    .setAccessCreationTimeStamp(accessCreationTimeStamp)
+                    .build();
+
         } catch (IOException e) {
             e.printStackTrace();
+
         }
         // TODO: Implement checking if token is expired based on timestamp
         // If the access token is expired
         // if ( ... convert things to ints, do math ) { return CacheState.ACCESS_TOKEN_EXPIRED; }
 
-        return CacheState.ACCESS_TOKEN_VALID;
+        return new Pair<>(CacheState.ACCESS_TOKEN_VALID, genericCredentials);
     }
 
-    /**
-     * Using authorizationFlow, attempts to refresh the existing access token using the existing refresh token.
-     * Sets accessToken, refreshToken, accessDuration, and accessCreationTimeStamp if successful.
-     * NOTE: ONLY WORKS if the authorization flow type in use supports token refreshing, AND token caching is enabled.
-     * <p>
-     * NOTE: Call authorizationFlow.isRefreshable() to check if an auth flow supports refreshing before calling this
-     * method.
-     *
-     * @return Success value as a boolean indicating if the auth flow was able to refresh the access token.
-     */
-    private boolean authRefresh() {
-        GenericCredentials credentials = authorizationFlow.refresh();
-        if (credentials == null)
-            return false;
-        accessToken = credentials.getAccessToken();
-        // TODO: What happens when an auth flow doesn't supply a refresh token?
-        refreshToken = credentials.getRefreshToken();
-        accessDuration = credentials.getExpiresIn().toString();
-        // TODO: Add getting current time in HH:MM:SS format
-        //this.accessCreationTimeStamp =
-        return true;
-    }
-
-    /**
-     * Using 'authorizationFlow', attempts to set, accessToken, refreshToken, accessDuration,
-     * and accessCreationTimeStamp. Depending on what authorization flow type is being used,
-     * the end user may be required to sign in.
-     */
-    private void fullAuthRefresh() {
-        GenericCredentials credentials = authorizationFlow.authorize();
-
-        accessToken = credentials.getAccessToken();
-        // TODO: What happens when an auth flow doesn't supply a refresh token?
-        refreshToken = credentials.getRefreshToken();
-        accessDuration = credentials.getExpiresIn().toString();
-        // TODO: Add getting current time in HH:MM:SS format
-        //this.accessCreationTimeStamp =
-    }
-
-    private void setTokensOnSpotifyInstance() {
-        spotifyApi.setAccessToken(this.accessToken);
+    private void setTokensOnSpotifyInstance(GenericCredentials genericCredentials) {
+        spotifyApi.setAccessToken(genericCredentials.getAccessToken());
         // Not all auth flows return a refresh token, namely, Implicit Grand flow and Client Credentials flow
-        if (this.authorizationFlow.isRefreshable() && this.refreshToken != null && !this.refreshToken.equals("")) {
-            spotifyApi.setRefreshToken(this.refreshToken);
+        String refreshToken = genericCredentials.getRefreshToken();
+        if (this.authorizationFlow.isRefreshable() && refreshToken != null && !refreshToken.equals("")) {
+            spotifyApi.setRefreshToken(refreshToken);
         }
     }
 
@@ -212,7 +206,7 @@ class AuthManager {
         return new Pair<>(true, "");
     }
 
-    public enum Authentication {
+    public enum AuthStatus {
         SUCCESS,
         FAIL
     }

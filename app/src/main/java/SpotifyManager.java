@@ -125,7 +125,7 @@ class SpotifyManager {
         if (chosenValue != null) {
             logger.info(message);
         } else {
-            logger.info(varName + ": Not assigned a value");
+            logger.info(varName + ": <No assigned value>");
         }
         return chosenValue;
     }
@@ -134,7 +134,11 @@ class SpotifyManager {
     public SpotifyApi CreateSession() {
         var logMsg = "%s is null. Cannot create spotify session.";
         var userErrorMsg = "ERROR: No configuration found for %s; cannot create Spotify session. " +
-                "Please set a configuration via a .env file, via an environment variable, or via option/flag.";
+                "Please set a configuration using an option/flag, an environment variable, or an .env file";
+
+        // TODO: Test what happens when you have a different redirect uri from the one set in your spotify dev app settings
+        // Create Spotify instance
+        //---------------------------------------------------------------------
         if (redirectURI == null) {
             logger.error(String.format(logMsg, "Redirect URI"));
             System.err.println(String.format(userErrorMsg, "SPOTIFY_REDIRECT_URI"));
@@ -152,11 +156,14 @@ class SpotifyManager {
                 .setClientId(clientID)
                 .setRedirectUri(spotifyURI);
 
+        // Not all authentication flows require a client secret to be set
         if (clientSecret != null)
             spotifyApiBuilder.setClientSecret(clientSecret);
 
         var spotifyApi = spotifyApiBuilder.build();
 
+        // Create authentication flow, for authenticating the spotify instance
+        //---------------------------------------------------------------------
         AbstractAuthorizationFlow authFlow = null;
         // NOTE: More cases coming soon :)
         switch (authFlowType) {
@@ -187,6 +194,7 @@ class SpotifyManager {
                 logger.error("No auth flow selected");
         }
 
+        // Since not all auth flows require a client secret, check if the current flow DOES require one
         if (clientSecret == null && authFlow.requiresClientSecret()) {
             logger.error(String.format(logMsg, "Client Secret"));
             logger.error("Current selected auth flow requires client secret to be set");
@@ -201,7 +209,7 @@ class SpotifyManager {
                 .disableTokenRefresh(disableTokenRefresh)
                 .build();
 
-        if (authManager.authenticateSpotifyInstance() == AuthManager.Authentication.FAIL) {
+        if (authManager.authenticateSpotifyInstance() == AuthManager.AuthStatus.FAIL) {
             return null;
         }
 
