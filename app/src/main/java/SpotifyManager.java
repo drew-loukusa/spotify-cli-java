@@ -152,14 +152,26 @@ class SpotifyManager {
                 .setClientId(clientID)
                 .setRedirectUri(spotifyURI);
 
+        if (clientSecret != null)
+            spotifyApiBuilder.setClientSecret(clientSecret);
+
         var spotifyApi = spotifyApiBuilder.build();
 
         AbstractAuthorizationFlow authFlow = null;
         // NOTE: More cases coming soon :)
         switch (authFlowType) {
             case "PKCE":
-                logger.info("PKCE Auth flow selected");
-                var authFlowBuilder = new AuthFlowPKCE.Builder(spotifyApi)
+                logger.info("Auth Code with PKCE flow selected");
+                var authFlowPKCEBuilder = new AuthFlowPKCE.Builder(spotifyApi)
+                        .showDialog(false);
+                if (authScopes != null)
+                    authFlowPKCEBuilder.scope(authScopes);
+                authFlow = authFlowPKCEBuilder.build();
+                break;
+
+            case "CodeFlow":
+                logger.info("Auth Code flow selected");
+                var authFlowBuilder = new AuthFlowCodeFlow.Builder(spotifyApi)
                         .showDialog(false);
                 if (authScopes != null)
                     authFlowBuilder.scope(authScopes);
@@ -181,8 +193,7 @@ class SpotifyManager {
             System.err.println(String.format(userErrorMsg, "SPOTIFY_CLIENT_SECRET"));
             System.err.println("Current selected auth flow requires client secret to be set");
             return null;
-        } else if (clientSecret != null)
-            spotifyApiBuilder.setClientSecret(clientSecret);
+        }
 
         assert authFlow != null;
         var authManager = new AuthManager.Builder(authFlow, spotifyApi)

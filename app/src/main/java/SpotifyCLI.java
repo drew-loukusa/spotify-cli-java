@@ -106,10 +106,6 @@ class InfoCommand implements Callable<Integer> {
     @Parameters(index = "1", description = "The ID of item to retrieve info for")
     private String itemID;
 
-
-    InfoCommand() throws IOException, ParseException, SpotifyWebApiException {
-    }
-
     public void getArtist_Sync() throws IOException, ParseException, SpotifyWebApiException {
         SpotifyApi spotifyApi = new SpotifyManager.Builder()
                 .build()
