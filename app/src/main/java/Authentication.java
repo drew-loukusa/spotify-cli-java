@@ -8,6 +8,7 @@ import com.wrapper.spotify.requests.authorization.authorization_code.Authorizati
 import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERefreshRequest;
 import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERequest;
 import com.wrapper.spotify.requests.authorization.client_credentials.ClientCredentialsRequest;
+import org.apache.hc.core5.http.HttpRequest;
 import org.apache.hc.core5.http.ParseException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -16,10 +17,13 @@ import org.slf4j.LoggerFactory;
 import utility.CallbackServer;
 import utility.PKCE;
 
+import javax.print.attribute.standard.Destination;
 import java.awt.*;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
-import java.net.URI;
+import java.net.*;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 
@@ -199,6 +203,29 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
 
         URI uri = requestBuilder.build().execute();
 
+        URL url = null;
+        try {
+            url = new URL(uri.toString());
+            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            con.setRequestMethod("GET");
+            con.setInstanceFollowRedirects(true);
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(con.getInputStream()));
+            String inputLine;
+            StringBuffer content = new StringBuffer();
+            while ((inputLine = in.readLine()) != null) {
+                content.append(inputLine);
+            }
+//            System.out.println(content);
+            System.out.println(con.getResponseCode());
+            System.out.println(con.getResponseMessage());
+            in.close();
+            System.exit(1);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         CallbackServer cbServer = cbServerBuilder.build();
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
             try {
@@ -210,6 +237,8 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
             System.out.println("Please navigate to this url in a browser and authorize the application:");
             System.out.println("URI: " + uri.toString());
         }
+
+        // TODO: Check server, ensure redirect URI is correct before trying to get the authcode
         String authCode = cbServer.getAuthCode();
         cbServer.destroy();
 

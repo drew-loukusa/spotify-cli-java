@@ -115,6 +115,7 @@ class InfoCommand implements Callable<Integer> {
 
         GetArtistRequest getArtistRequest = spotifyApi.getArtist(itemID)
                 .build();
+
         try {
             Artist artist = getArtistRequest.execute();
             System.out.println("Artist Name: " + artist.getName());

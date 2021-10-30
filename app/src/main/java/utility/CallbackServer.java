@@ -38,6 +38,8 @@ public class CallbackServer {
     private String hostName;
 
     private CallbackServer(Builder builder) {
+        this.port = builder.port;
+        this.hostName = builder.hostName;
         try {
             server = HttpServer.create(new InetSocketAddress(hostName, port), 0);
             server.createContext("/", requestHandler);
@@ -47,8 +49,6 @@ public class CallbackServer {
         } catch (IOException e) {
             logger.error(e.getMessage());
         }
-        this.port = builder.port;
-        this.hostName = builder.hostName;
     }
 
     public String getAuthCode() {
@@ -81,7 +81,7 @@ public class CallbackServer {
 
     static public class authServerHandler implements HttpHandler {
         private static final Logger logger
-                = (Logger) LoggerFactory.getLogger("]spotify-cli-java.utility.CallbackServer.Builder");
+                = LoggerFactory.getLogger("spotify-cli-java.utility.CallbackServer.Builder");
         private final CountDownLatch tokenLatch = new CountDownLatch(1);
         private String authCode;
 
@@ -191,8 +191,6 @@ public class CallbackServer {
                         .split("\\?")[1]
                         .split("=")[1];
             }
-
-
         }
 
         private String fetchAuthCode() {
@@ -205,7 +203,6 @@ public class CallbackServer {
             logger.info("Passing access code from callback");
             return authCode;
         }
-
     }
 
     public static class NamedThreadFactory implements ThreadFactory {

@@ -169,7 +169,6 @@ class SpotifyManager {
         // Create authentication flow, for authenticating the spotify instance
         //---------------------------------------------------------------------
         AbstractAuthorizationFlow authFlow = null;
-        // NOTE: More cases coming soon :)
         switch (authFlowType) {
             case "PKCE":
                 logger.info("Auth Code with PKCE flow selected");
@@ -200,8 +199,8 @@ class SpotifyManager {
 
         // Since not all auth flows require a client secret, check if the current flow DOES require one
         if (clientSecret == null && authFlow.requiresClientSecret()) {
-            logger.error(String.format(logMsg, "Client Secret"));
-            logger.error("Current selected auth flow requires client secret to be set");
+            logger.error(String.format(logMsg, "Client Secret") +
+                    "\nCurrent selected auth flow requires client secret to be set");
             System.err.printf((userErrorMsg) + "%n", "SPOTIFY_CLIENT_SECRET");
             System.err.println("Current selected auth flow requires client secret to be set");
             return null;
