@@ -13,6 +13,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import utility.CallbackServer;
 import utility.PKCE;
 
 import java.awt.*;
@@ -83,17 +84,17 @@ class GenericCredentials {
         private Integer expiresIn;
         private String accessCreationTimeStamp = getTimeStamp();
 
-        public Builder setAccessToken(String accessToken) {
+        public Builder withAccessToken(String accessToken) {
             this.accessToken = accessToken;
             return this;
         }
 
-        public Builder setRefreshToken(String refreshToken) {
+        public Builder withRefreshToken(String refreshToken) {
             this.refreshToken = refreshToken;
             return this;
         }
 
-        public Builder setExpiresIn(Integer expiresIn) {
+        public Builder withExpiresIn(Integer expiresIn) {
             this.expiresIn = expiresIn;
             return this;
         }
@@ -104,7 +105,7 @@ class GenericCredentials {
          * FORMAT: %d-%02d-%02d %02d:%02d:%02d
          * EXAMPLE DATE: 2021-10-29 14:02:16
          */
-        public Builder setAccessCreationTimeStamp(String accessCreationTimeStamp){
+        public Builder withAccessCreationTimeStamp(String accessCreationTimeStamp){
             // TODO: validate format of string here, raise exception?
             this.accessCreationTimeStamp = accessCreationTimeStamp;
             return this;
@@ -119,9 +120,11 @@ class GenericCredentials {
 // TODO: Add name field to abstract auth flow
 abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
     protected SpotifyApi spotifyApi;
+    protected CallbackServer.Builder cbServerBuilder;
 
     protected AbstractAuthorizationFlow(final Builder builder) {
         this.spotifyApi = builder.spotifyApi;
+        this.cbServerBuilder = builder.cbServerBuilder;
     }
 
     @Override
@@ -131,9 +134,10 @@ abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
 
     public static abstract class Builder {
         private final SpotifyApi spotifyApi;
-
-        protected Builder(SpotifyApi spotifyApi) {
+        private final CallbackServer.Builder cbServerBuilder;
+        protected Builder(SpotifyApi spotifyApi, CallbackServer.Builder cbServerBuilder) {
             this.spotifyApi = spotifyApi;
+            this.cbServerBuilder = cbServerBuilder;
         }
     }
 }
@@ -178,9 +182,9 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
         }
         if (credentials != null) {
             return new GenericCredentials.Builder()
-                    .setAccessToken(credentials.getAccessToken())
-                    .setRefreshToken(credentials.getRefreshToken())
-                    .setExpiresIn(credentials.getExpiresIn())
+                    .withAccessToken(credentials.getAccessToken())
+                    .withRefreshToken(credentials.getRefreshToken())
+                    .withExpiresIn(credentials.getExpiresIn())
                     .build();
         } else return null;
     }
@@ -195,7 +199,7 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
 
         URI uri = requestBuilder.build().execute();
 
-        var cbServer = new CallbackServer();
+        CallbackServer cbServer = cbServerBuilder.build();
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
             try {
                 Desktop.getDesktop().browse(uri);
@@ -214,9 +218,9 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
         try {
             AuthorizationCodeCredentials credentials = authorizationCodeRequest.execute();
             return new GenericCredentials.Builder()
-                    .setAccessToken(credentials.getAccessToken())
-                    .setRefreshToken(credentials.getRefreshToken())
-                    .setExpiresIn(credentials.getExpiresIn())
+                    .withAccessToken(credentials.getAccessToken())
+                    .withRefreshToken(credentials.getRefreshToken())
+                    .withExpiresIn(credentials.getExpiresIn())
                     .build();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             System.err.println("Error: " + e.getMessage());
@@ -240,8 +244,8 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
         private String scope = null;
         private boolean showDialog = false;
 
-        public Builder(@NotNull SpotifyApi spotifyApi) {
-            super(spotifyApi);
+        public Builder(@NotNull SpotifyApi spotifyApi, @NotNull CallbackServer.Builder cbServerBuilder) {
+            super(spotifyApi, cbServerBuilder);
         }
 
         // Might not need to expose this one to end users, since it might make sense to generate state strings
@@ -251,12 +255,12 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
             return this;
         }
 
-        public Builder scope(String scope) {
+        public Builder withScope(String scope) {
             this.scope = scope;
             return this;
         }
 
-        public Builder showDialog(boolean showDialog) {
+        public Builder withShowDialog(boolean showDialog) {
             this.showDialog = showDialog;
             return this;
         }
@@ -311,9 +315,9 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
         }
         if (credentials != null) {
             return new GenericCredentials.Builder()
-                    .setAccessToken(credentials.getAccessToken())
-                    .setRefreshToken(credentials.getRefreshToken())
-                    .setExpiresIn(credentials.getExpiresIn())
+                    .withAccessToken(credentials.getAccessToken())
+                    .withRefreshToken(credentials.getRefreshToken())
+                    .withExpiresIn(credentials.getExpiresIn())
                     .build();
         } else return null;
     }
@@ -328,7 +332,7 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
 
         URI uri = requestBuilder.build().execute();
 
-        var cbServer = new CallbackServer();
+        CallbackServer cbServer = cbServerBuilder.build();
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
             try {
                 Desktop.getDesktop().browse(uri);
@@ -348,9 +352,9 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
         try {
             AuthorizationCodeCredentials credentials = authCodePKCERequest.execute();
             return new GenericCredentials.Builder()
-                    .setAccessToken(credentials.getAccessToken())
-                    .setRefreshToken(credentials.getRefreshToken())
-                    .setExpiresIn(credentials.getExpiresIn())
+                    .withAccessToken(credentials.getAccessToken())
+                    .withRefreshToken(credentials.getRefreshToken())
+                    .withExpiresIn(credentials.getExpiresIn())
                     .build();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             System.err.println("Error: " + e.getMessage());
@@ -377,8 +381,8 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
         private String scope = null;
         private boolean showDialog = false;
 
-        public Builder(@NotNull SpotifyApi spotifyApi) {
-            super(spotifyApi);
+        public Builder(@NotNull SpotifyApi spotifyApi, @NotNull CallbackServer.Builder cbServerBuilder) {
+            super(spotifyApi, cbServerBuilder);
         }
 
         // Might not need to expose this one to end users, since it might make sense to generate state strings
@@ -388,12 +392,12 @@ class AuthFlowPKCE extends AbstractAuthorizationFlow {
             return this;
         }
 
-        public Builder scope(String scope) {
+        public Builder withScope(String scope) {
             this.scope = scope;
             return this;
         }
 
-        public Builder showDialog(boolean showDialog) {
+        public Builder withShowDialog(boolean showDialog) {
             this.showDialog = showDialog;
             return this;
         }
@@ -450,14 +454,14 @@ class AuthFlowClientCredentials extends AbstractAuthorizationFlow {
         }
 
         return new GenericCredentials.Builder()
-                .setAccessToken(credentials.getAccessToken())
-                .setExpiresIn(credentials.getExpiresIn())
+                .withAccessToken(credentials.getAccessToken())
+                .withExpiresIn(credentials.getExpiresIn())
                 .build();
     }
 
     public static class Builder extends AbstractAuthorizationFlow.Builder {
-        public Builder(@NotNull SpotifyApi spotifyApi) {
-            super(spotifyApi);
+        public Builder(@NotNull SpotifyApi spotifyApi, @NotNull CallbackServer.Builder cbServerBuilder) {
+            super(spotifyApi, cbServerBuilder);
         }
 
         public AuthFlowClientCredentials build() {

@@ -4,25 +4,24 @@ import io.github.cdimascio.dotenv.Dotenv;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import utility.CallbackServer;
 
 import java.net.URI;
 
 class SpotifyManager {
     private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.SpotifyManager");
 
-    // TODO: Move defaults out of code, or at least out of THIS Code
+    // TODO: Maybe move defaults out of code, or at least out of THIS Code
+    // I can override the defaults in other places, so maybe this is fine? not Sure yet
     // It might make more sense to have the defaults in the CLI, and have them used if the user provides no
     // config via flags
-//    private static final String DEFAULT_CLIENT_ID = "e896df19119b4105a6e49585b8013bb9";
-//    private static final String DEFAULT_REDIRECT_URI = "http://localhost:8080";
-//    private static final String DEFAULT_AUTH_FLOW = "PKCE";
-//    private static final String DEFAULT_DISABLE_TOKEN_CACHING = "false";
-//    private static final String DEFAULT_DISABLE_TOKEN_REFRESH = "false";
-    private static final String DEFAULT_CLIENT_ID = null;
-    private static final String DEFAULT_REDIRECT_URI = null;
-    private static final String DEFAULT_AUTH_FLOW = null;
-    private static final String DEFAULT_DISABLE_TOKEN_CACHING = null;
-    private static final String DEFAULT_DISABLE_TOKEN_REFRESH = null;
+    private static final String DEFAULT_CLIENT_ID = "e896df19119b4105a6e49585b8013bb9";
+    private static final String DEFAULT_REDIRECT_URI = "http://localhost:8080";
+    private static final String DEFAULT_AUTH_FLOW = "PKCE";
+    private static final String DEFAULT_DISABLE_TOKEN_CACHING = "false";
+    private static final String DEFAULT_DISABLE_TOKEN_REFRESH = "false";
+    private static final int DEFAULT_PORT = 8080;
+    private static final String DEFAULT_HOST_NAME = "0.0.0.0";
 
     // Don't raise exceptions if .env is missing, or if a var isn't set in the environment;
     // Defaults are provided for Client ID and redirect uri.
@@ -141,14 +140,14 @@ class SpotifyManager {
         //---------------------------------------------------------------------
         if (redirectURI == null) {
             logger.error(String.format(logMsg, "Redirect URI"));
-            System.err.println(String.format(userErrorMsg, "SPOTIFY_REDIRECT_URI"));
+            System.err.printf((userErrorMsg) + "%n", "SPOTIFY_REDIRECT_URI");
             return null;
         }
         final URI spotifyURI = SpotifyHttpManager.makeUri(redirectURI);
 
         if (clientID == null) {
             logger.error(String.format(logMsg, "Client ID"));
-            System.err.println(String.format(userErrorMsg, "SPOTIFY_CLIENT_ID"));
+            System.err.printf((userErrorMsg) + "%n", "SPOTIFY_CLIENT_ID");
             return null;
         }
 
@@ -162,6 +161,11 @@ class SpotifyManager {
 
         var spotifyApi = spotifyApiBuilder.build();
 
+        // Configure a CallBackServer builder for use in the to-be-selected auth flow
+        var cbServerBuilder = new CallbackServer.Builder()
+                .withHostName(DEFAULT_HOST_NAME)
+                .withPort(DEFAULT_PORT);
+
         // Create authentication flow, for authenticating the spotify instance
         //---------------------------------------------------------------------
         AbstractAuthorizationFlow authFlow = null;
@@ -169,25 +173,25 @@ class SpotifyManager {
         switch (authFlowType) {
             case "PKCE":
                 logger.info("Auth Code with PKCE flow selected");
-                var authFlowPKCEBuilder = new AuthFlowPKCE.Builder(spotifyApi)
-                        .showDialog(false);
+                var authFlowPKCEBuilder = new AuthFlowPKCE.Builder(spotifyApi, cbServerBuilder)
+                        .withShowDialog(false);
                 if (authScopes != null)
-                    authFlowPKCEBuilder.scope(authScopes);
+                    authFlowPKCEBuilder.withScope(authScopes);
                 authFlow = authFlowPKCEBuilder.build();
                 break;
 
             case "CodeFlow":
                 logger.info("Auth Code flow selected");
-                var authFlowBuilder = new AuthFlowCodeFlow.Builder(spotifyApi)
-                        .showDialog(false);
+                var authFlowBuilder = new AuthFlowCodeFlow.Builder(spotifyApi, cbServerBuilder)
+                        .withShowDialog(false);
                 if (authScopes != null)
-                    authFlowBuilder.scope(authScopes);
+                    authFlowBuilder.withScope(authScopes);
                 authFlow = authFlowBuilder.build();
                 break;
 
             case "ClientCredentials":
                 logger.info("Client Credentials flow selected");
-                authFlow = new AuthFlowClientCredentials.Builder(spotifyApi)
+                authFlow = new AuthFlowClientCredentials.Builder(spotifyApi, cbServerBuilder)
                         .build();
                 break;
             default:
@@ -198,15 +202,15 @@ class SpotifyManager {
         if (clientSecret == null && authFlow.requiresClientSecret()) {
             logger.error(String.format(logMsg, "Client Secret"));
             logger.error("Current selected auth flow requires client secret to be set");
-            System.err.println(String.format(userErrorMsg, "SPOTIFY_CLIENT_SECRET"));
+            System.err.printf((userErrorMsg) + "%n", "SPOTIFY_CLIENT_SECRET");
             System.err.println("Current selected auth flow requires client secret to be set");
             return null;
         }
 
         assert authFlow != null;
         var authManager = new AuthManager.Builder(authFlow, spotifyApi)
-                .disableTokenCaching(disableTokenCaching)
-                .disableTokenRefresh(disableTokenRefresh)
+                .withDisableTokenCaching(disableTokenCaching)
+                .withDisableTokenRefresh(disableTokenRefresh)
                 .build();
 
         if (authManager.authenticateSpotifyInstance() == AuthManager.AuthStatus.FAIL) {
@@ -228,37 +232,37 @@ class SpotifyManager {
         public Builder() {
         }
 
-        public Builder clientID(String clientID) {
+        public Builder withClientID(String clientID) {
             this.clientID = clientID;
             return this;
         }
 
-        public Builder clientSecret(String clientSecret) {
+        public Builder withClientSecret(String clientSecret) {
             this.clientSecret = clientSecret;
             return this;
         }
 
-        public Builder redirectURI(String redirectURI) {
+        public Builder withRedirectURI(String redirectURI) {
             this.redirectURI = redirectURI;
             return this;
         }
 
-        public Builder authScopes(String authScopes) {
+        public Builder withAuthScopes(String authScopes) {
             this.authScopes = authScopes;
             return this;
         }
 
-        public Builder authFlowType(String authFlowType) {
+        public Builder withAuthFlowType(String authFlowType) {
             this.authFlowType = authFlowType;
             return this;
         }
 
-        public Builder disableTokenCaching(boolean disableTokenCaching) {
+        public Builder withDisableTokenCaching(boolean disableTokenCaching) {
             this.disableTokenCaching = disableTokenCaching;
             return this;
         }
 
-        public Builder disableTokenRefresh(boolean disableTokenRefresh) {
+        public Builder withDisableTokenRefresh(boolean disableTokenRefresh) {
             this.disableTokenRefresh = disableTokenRefresh;
             return this;
         }

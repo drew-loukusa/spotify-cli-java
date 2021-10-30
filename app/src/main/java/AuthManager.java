@@ -126,7 +126,7 @@ class AuthManager {
         return AuthStatus.FAIL;
     }
 
-    private void cacheTokensToFile(GenericCredentials genericCredentials) {
+    private void cacheTokensToFile(@NotNull GenericCredentials genericCredentials) {
         String accessToken = genericCredentials.getAccessToken();
         String refreshToken = genericCredentials.getRefreshToken();
         String accessDuration = genericCredentials.getExpiresIn().toString();
@@ -167,10 +167,10 @@ class AuthManager {
             logger.debug("Loaded access token timestamp: " + accessCreationTimeStamp);
 
             genericCredentials = new GenericCredentials.Builder()
-                    .setAccessToken(accessToken)
-                    .setRefreshToken(refreshToken)
-                    .setExpiresIn(Integer.valueOf(accessDuration))
-                    .setAccessCreationTimeStamp(accessCreationTimeStamp)
+                    .withAccessToken(accessToken)
+                    .withRefreshToken(refreshToken)
+                    .withExpiresIn(Integer.valueOf(accessDuration))
+                    .withAccessCreationTimeStamp(accessCreationTimeStamp)
                     .build();
 
         } catch (IOException e) {
@@ -184,7 +184,7 @@ class AuthManager {
         return new Pair<>(CacheState.ACCESS_TOKEN_VALID, genericCredentials);
     }
 
-    private void setTokensOnSpotifyInstance(GenericCredentials genericCredentials) {
+    private void setTokensOnSpotifyInstance(@NotNull GenericCredentials genericCredentials) {
         spotifyApi.setAccessToken(genericCredentials.getAccessToken());
         // Not all auth flows return a refresh token, namely, Implicit Grand flow and Client Credentials flow
         String refreshToken = genericCredentials.getRefreshToken();
@@ -230,7 +230,7 @@ class AuthManager {
             this.spotifyApi = spotifyApi;
         }
 
-        public Builder tokenCacheFilePath(String tokenCacheFilePath) {
+        public Builder withTokenCacheFilePath(String tokenCacheFilePath) {
             this.tokenCacheFilePath = tokenCacheFilePath;
             return this;
         }
@@ -239,7 +239,7 @@ class AuthManager {
          * Disables token refreshing: I.E. If a cached access token is invalid or expired, the app will not try
          * to refresh it. Instead, a new token is acquired through the configured authentication flow
          */
-        public Builder disableTokenRefresh(boolean bool) {
+        public Builder withDisableTokenRefresh(boolean bool) {
             this.disableTokenRefresh = bool;
             return this;
         }
@@ -247,7 +247,7 @@ class AuthManager {
         /**
          * Disables token caching. NOTE: Also disables token refresh, since token refresh relies on the token cache
          */
-        public Builder disableTokenCaching(boolean bool) {
+        public Builder withDisableTokenCaching(boolean bool) {
             this.disableTokenCaching = bool;
             return this;
         }

@@ -1,4 +1,4 @@
-/*
+package utility;/*
  * The following code is borrowed code that I have modified.
  * The original author is Jaxcskn on github: https://github.com/jaxcksn/nanoleafMusic
  * If this file ever makes it into a repo of mine, I need to add his license or something? He was using BSD 3
@@ -31,22 +31,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class CallbackServer {
     private static final Logger logger
-            = (Logger) LoggerFactory.getLogger("spotify-cli-java.CallbackServer");
+            = LoggerFactory.getLogger("spotify-cli-java.utility.CallbackServer");
     protected static HttpServer server;
     private final authServerHandler requestHandler = new authServerHandler();
+    private int port;
+    private String hostName;
 
-    public CallbackServer() {
-
+    private CallbackServer(Builder builder) {
         try {
-            server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8080), 0);
+            server = HttpServer.create(new InetSocketAddress(hostName, port), 0);
             server.createContext("/", requestHandler);
             ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(5, new NamedThreadFactory("callback"));
             server.setExecutor(threadPoolExecutor);
             server.start();
         } catch (IOException e) {
-            //Main.showException(e);
+            logger.error(e.getMessage());
         }
-
+        this.port = builder.port;
+        this.hostName = builder.hostName;
     }
 
     public String getAuthCode() {
@@ -58,9 +60,28 @@ public class CallbackServer {
         server.stop(0);
     }
 
+    public static class Builder {
+        private int port = 8080;
+        private String hostName = "0.0.0.0";
+
+        public CallbackServer build() {
+            return new CallbackServer(this);
+        }
+
+        public Builder withPort(int port) {
+            this.port = port;
+            return this;
+        }
+
+        public Builder withHostName(String hostName) {
+            this.hostName = hostName;
+            return this;
+        }
+    }
+
     static public class authServerHandler implements HttpHandler {
         private static final Logger logger
-                = (Logger) LoggerFactory.getLogger("]spotify-cli-java.CallbackServer.Builder");
+                = (Logger) LoggerFactory.getLogger("]spotify-cli-java.utility.CallbackServer.Builder");
         private final CountDownLatch tokenLatch = new CountDownLatch(1);
         private String authCode;
 
