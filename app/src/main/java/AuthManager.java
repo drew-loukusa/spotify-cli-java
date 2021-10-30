@@ -132,16 +132,17 @@ class AuthManager {
         String accessDuration = genericCredentials.getExpiresIn().toString();
         String accessCreationTimeStamp = genericCredentials.getAccessCreationTimeStamp();
         try (var fileWriter = new FileWriter(TOKEN_CACHE_PATH)) {
-            fileWriter.write("ACCESS_TOKEN\t" + accessToken + "\n");
-            fileWriter.write("REFRESH_TOKEN\t" + refreshToken + "\n");
-            fileWriter.write("ACCESS_DURATION_SECONDS\t" + accessDuration + "\n");
-            fileWriter.write("ACCESS_CREATION_TIMESTAMP\t" + accessCreationTimeStamp + "\n");
-            fileWriter.write("ACCESS_CREATION_FORMAT\tYY:MM:DD:HH:MM:SS\n");
+            fileWriter.write("ACCESS_TOKEN\t" + accessToken
+                    + "\nREFRESH_TOKEN\t" + refreshToken
+                    + "\nACCESS_DURATION_SECONDS\t" + accessDuration
+                    + "\nACCESS_CREATION_TIMESTAMP\t" + accessCreationTimeStamp
+                    + "\nACCESS_CREATION_FORMAT\tYY:MM:DD:HH:MM:SS\n"
+            );
             logger.info(String.format("Cached tokens to file with name \"%s\"", TOKEN_CACHE_PATH));
-            logger.debug("Wrote access token: " + accessToken);
-            logger.debug("Wrote refresh token: " + refreshToken);
-            logger.debug("Wrote access token duration: " + accessDuration);
-            logger.debug("Wrote access token timestamp: " + accessCreationTimeStamp);
+            logger.debug("Wrote access token: " + accessToken + "\nWrote refresh token: " + refreshToken
+                    + "\nWrote access token duration: " + accessDuration
+                    + "\nWrote access token timestamp: " + accessCreationTimeStamp
+            );
         } catch (IOException e) {
             logger.error(e.getMessage());
         }
