@@ -203,29 +203,6 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
 
         URI uri = requestBuilder.build().execute();
 
-        URL url = null;
-        try {
-            url = new URL(uri.toString());
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            con.setRequestMethod("GET");
-            con.setInstanceFollowRedirects(true);
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(con.getInputStream()));
-            String inputLine;
-            StringBuffer content = new StringBuffer();
-            while ((inputLine = in.readLine()) != null) {
-                content.append(inputLine);
-            }
-//            System.out.println(content);
-            System.out.println(con.getResponseCode());
-            System.out.println(con.getResponseMessage());
-            in.close();
-            System.exit(1);
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         CallbackServer cbServer = cbServerBuilder.build();
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
             try {

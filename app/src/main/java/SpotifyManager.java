@@ -135,7 +135,6 @@ class SpotifyManager {
         var userErrorMsg = "ERROR: No configuration found for %s; cannot create Spotify session. " +
                 "Please set a configuration using an option/flag, an environment variable, or an .env file";
 
-        // TODO: Test what happens when you have a different redirect uri from the one set in your spotify dev app settings
         // Create Spotify instance
         //---------------------------------------------------------------------
         if (redirectURI == null) {
@@ -207,9 +206,11 @@ class SpotifyManager {
         }
 
         assert authFlow != null;
+        var tokenCacher = new TokenCache();
         var authManager = new AuthManager.Builder(authFlow, spotifyApi)
                 .withDisableTokenCaching(disableTokenCaching)
                 .withDisableTokenRefresh(disableTokenRefresh)
+                .withTokenCache(tokenCacher)
                 .build();
 
         if (authManager.authenticateSpotifyInstance() == AuthManager.AuthStatus.FAIL) {
