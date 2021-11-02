@@ -40,6 +40,10 @@ public class CallbackServer {
     private CallbackServer(Builder builder) {
         this.port = builder.port;
         this.hostName = builder.hostName;
+        logger.debug("Starting callback server..");
+        logger.debug("With Port: " + port);
+        logger.debug("With hostName: " + hostName);
+
         try {
             server = HttpServer.create(new InetSocketAddress(hostName, port), 0);
             server.createContext("/", requestHandler);

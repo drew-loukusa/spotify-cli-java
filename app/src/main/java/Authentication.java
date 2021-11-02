@@ -215,7 +215,6 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
             System.out.println("URI: " + uri.toString());
         }
 
-        // TODO: Check server, ensure redirect URI is correct before trying to get the authcode
         String authCode = cbServer.getAuthCode();
         cbServer.destroy();
 

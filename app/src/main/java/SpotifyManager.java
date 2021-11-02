@@ -20,8 +20,8 @@ class SpotifyManager {
     private static final String DEFAULT_AUTH_FLOW = "PKCE";
     private static final String DEFAULT_DISABLE_TOKEN_CACHING = "false";
     private static final String DEFAULT_DISABLE_TOKEN_REFRESH = "false";
-    private static final int DEFAULT_PORT = 8080;
-    private static final String DEFAULT_HOST_NAME = "0.0.0.0";
+    private static final int DEFAULT_CALLBACK_SERVER_PORT = 8080;
+    private static final String DEFAULT_CALLBACK_SERVER_HOST_NAME = "0.0.0.0";
 
     // Don't raise exceptions if .env is missing, or if a var isn't set in the environment;
     // Defaults are provided for Client ID and redirect uri.
@@ -36,6 +36,8 @@ class SpotifyManager {
     private static final String SPOTIFY_REDIRECT_URI = dotenv.get("SPOTIFY_REDIRECT_URI");
     private static final String DISABLE_TOKEN_CACHING = dotenv.get("DISABLE_TOKEN_CACHING");
     private static final String DISABLE_TOKEN_REFRESH = dotenv.get("DISABLE_TOKEN_REFRESH");
+    private static final String CALLBACK_SERVER_HOSTNAME = dotenv.get("CALLBACK_SERVER_HOSTNAME");
+    private static final String CALLBACK_SERVER_PORT = dotenv.get("CALLBACK_SERVER_PORT");
 
     // These are optional
     private static final String SPOTIFY_CLIENT_SECRET = dotenv.get("SPOTIFY_CLIENT_SECRET");
@@ -48,6 +50,8 @@ class SpotifyManager {
     private final String authScopes;
     private final boolean disableTokenCaching;
     private final boolean disableTokenRefresh;
+    private final String callbackServerHostName;
+    private final int callbackServerPort;
 
     private SpotifyManager(Builder builder) {
         // If user did not set ENV vars, or create .env file, use defaults
@@ -96,6 +100,18 @@ class SpotifyManager {
                         DEFAULT_DISABLE_TOKEN_CACHING,
                         String.valueOf(builder.disableTokenCaching),
                         DISABLE_TOKEN_CACHING
+                )
+        );
+        this.callbackServerHostName = setVar(
+                "CALLBACK_SERVER_HOSTNAME",
+                DEFAULT_CALLBACK_SERVER_HOST_NAME,
+                CALLBACK_SERVER_HOSTNAME
+        );
+        this.callbackServerPort = Integer.parseInt(
+                setVar(
+                        "CALLBACK_SERVER_PORT",
+                        String.valueOf(DEFAULT_CALLBACK_SERVER_PORT),
+                        String.valueOf(CALLBACK_SERVER_PORT)
                 )
         );
     }
@@ -162,8 +178,8 @@ class SpotifyManager {
 
         // Configure a CallBackServer builder for use in the to-be-selected auth flow
         var cbServerBuilder = new CallbackServer.Builder()
-                .withHostName(DEFAULT_HOST_NAME)
-                .withPort(DEFAULT_PORT);
+                .withHostName(callbackServerHostName)
+                .withPort(callbackServerPort);
 
         // Create authentication flow, for authenticating the spotify instance
         //---------------------------------------------------------------------
