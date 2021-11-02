@@ -50,9 +50,13 @@ class AuthManager {
         }
 
         // Check the state of the cache
-        var loadPair = tokenCache.loadTokens();
-        TokenCache.CacheState cacheState = loadPair.getFirst();
-        GenericCredentials genericCredentials = loadPair.getSecond();
+        TokenCache.CacheState cacheState = null;
+        GenericCredentials genericCredentials = null;
+        if (tokenCachingEnabled) {
+            var loadPair = tokenCache.loadTokens();
+            cacheState = loadPair.getFirst();
+            genericCredentials = loadPair.getSecond();
+        }
 
         // Try to use tokens from the cache
         if (tokenCachingEnabled) {
