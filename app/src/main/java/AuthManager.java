@@ -1,7 +1,6 @@
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.requests.data.artists.GetArtistRequest;
-import kotlin.Pair;
 import org.apache.hc.core5.http.ParseException;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -49,35 +48,23 @@ class AuthManager {
             logger.info("Token refresh enabled");
         }
 
-        // Check the state of the cache
-        TokenCache.CacheState cacheState = null;
-        GenericCredentials genericCredentials = null;
-        if (tokenCachingEnabled) {
-            var loadPair = tokenCache.loadTokens();
-            cacheState = loadPair.getFirst();
-            genericCredentials = loadPair.getSecond();
-        }
+        GenericCredentials genericCredentials;
 
         // Try to use tokens from the cache
-        if (tokenCachingEnabled) {
-            if (cacheState == TokenCache.CacheState.ACCESS_TOKEN_VALID) {
+        if (tokenCachingEnabled && tokenCache.isValid()) {
+            logger.info("Attempting to load tokens from the cache");
+            genericCredentials = tokenCache.loadTokens();
+            if (genericCredentials != null) {
                 setTokensOnSpotifyInstance(genericCredentials);
 
                 // Test to see if the cached access token is still valid
-                var pair = testSpotifyConnection();
-                if (pair.getFirst()) {
+                String msg = testSpotifyConnection();
+                if (msg.equals("")) {
                     return AuthStatus.SUCCESS;
+                } else {
+                    logger.info(msg);
+                    logger.info("Cached token was invalid");
                 }
-
-                logger.info(pair.getSecond());
-                cacheState = TokenCache.CacheState.ACCESS_TOKEN_INVALID;
-            }
-            if (cacheState == TokenCache.CacheState.CACHE_DNE) {
-                logger.info("Token cache does not exist");
-            } else if (cacheState == TokenCache.CacheState.ACCESS_TOKEN_EXPIRED) {
-                logger.info("Cached token was expired");
-            } else if (cacheState == TokenCache.CacheState.ACCESS_TOKEN_INVALID) {
-                logger.info("Cached token was invalid");
             }
         }
 
@@ -93,14 +80,14 @@ class AuthManager {
         if (tokenCachingEnabled
                 && tokenRefreshEnabled
                 && authorizationFlow.isRefreshable()
-                && cacheState != TokenCache.CacheState.CACHE_DNE) {
-
+                && tokenCache.isValid()) {
+            logger.info("Attempting to refresh the access token using the cached refresh token");
             genericCredentials = authorizationFlow.refresh();
             if (genericCredentials != null) {
                 setTokensOnSpotifyInstance(genericCredentials);
 
-                var pair = testSpotifyConnection();
-                if (pair.getFirst()) {
+                String msg = testSpotifyConnection();
+                if (msg.equals("")) {
                     if (tokenCachingEnabled)
                         tokenCache.cacheTokens(genericCredentials);
                     logger.info("Successfully refreshed the access token");
@@ -109,21 +96,23 @@ class AuthManager {
             }
         }
 
+
         // If valid tokens could not be retrieved any other way, require a full refresh
         // This may mean the end user will have to sign in
+        logger.info("A full authorization is required, end user may be required to sign in");
         genericCredentials = authorizationFlow.authorize();
 
         if (tokenCachingEnabled)
             tokenCache.cacheTokens(genericCredentials);
 
         setTokensOnSpotifyInstance(genericCredentials);
-        var pair = testSpotifyConnection();
-        if (pair.getFirst()) {
+        String msg = testSpotifyConnection();
+        if (msg.equals("")) {
             logger.info("Successfully retrieved a new access token from Spotify");
             return AuthStatus.SUCCESS;
         }
 
-        logger.info(pair.getSecond());
+        logger.info(msg);
         return AuthStatus.FAIL;
     }
 
@@ -136,17 +125,22 @@ class AuthManager {
         }
     }
 
-    private Pair<Boolean, String> testSpotifyConnection() {
+
+    /**
+     * @return Upon failure, a string containing an error message, or upon success, an empty string.
+     */
+    private String testSpotifyConnection() {
         // Test token actually works. ID = Weezer , could probably switch to something else
         GetArtistRequest getArtistRequest = spotifyApi.getArtist("3jOstUTkEu2JkjvRdBA5Gu")
                 .build();
         try {
             getArtistRequest.execute();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
-            logger.info("Connection test with current tokens failed");
-            return new Pair<>(false, e.getMessage());
+            logger.info("Spotify connection test with current tokens FAILED");
+            return e.getMessage();
         }
-        return new Pair<>(true, "");
+        logger.info("Spotify connection test with current tokens SUCCEEDED");
+        return "";
     }
 
     public enum AuthStatus {

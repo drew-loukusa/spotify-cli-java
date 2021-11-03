@@ -1,5 +1,5 @@
-import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,10 +14,14 @@ interface ITokenCache {
     void cacheTokens(@NotNull GenericCredentials genericCredentials);
 
     // Load the tokens from the cache, into a GenericCredentials object and return it
-    Pair<TokenCache.CacheState, GenericCredentials> loadTokens();
+    GenericCredentials loadTokens();
+
+    // Is the cache valid? If loadTokens() is called, will it return a valid GenericCredentials object?
+    boolean isValid();
 
     // Set the path (if the implementation is using a file based approach) to the token cache
-    // Has no effect for non file based token caches
+    // Non file based token caches can simply implement this and return self
+    // Returns self, so as  enable flow style programming
     ITokenCache withTokenCachePath(String tokenCachePath);
 }
 
@@ -37,29 +41,26 @@ class TokenCache implements ITokenCache {
         String accessToken = genericCredentials.getAccessToken();
         String refreshToken = genericCredentials.getRefreshToken();
         String accessDuration = genericCredentials.getExpiresIn().toString();
-        String accessCreationTimeStamp = genericCredentials.getAccessCreationTimeStamp();
         try (var fileWriter = new FileWriter(tokenCachePath)) {
             fileWriter.write("ACCESS_TOKEN\t" + accessToken
                     + "\nREFRESH_TOKEN\t" + refreshToken
                     + "\nACCESS_DURATION_SECONDS\t" + accessDuration
-                    + "\nACCESS_CREATION_TIMESTAMP\t" + accessCreationTimeStamp
-                    + "\nACCESS_CREATION_FORMAT\tYY:MM:DD:HH:MM:SS\n"
             );
             logger.info(String.format("Cached tokens to file with name \"%s\"", tokenCachePath));
             logger.debug("Wrote access token: " + accessToken + "\nWrote refresh token: " + refreshToken
                     + "\nWrote access token duration: " + accessDuration
-                    + "\nWrote access token timestamp: " + accessCreationTimeStamp
             );
         } catch (IOException e) {
             logger.error(e.getMessage());
         }
     }
 
+    @Nullable
     @Override
-    public Pair<CacheState, GenericCredentials> loadTokens() {
+    public GenericCredentials loadTokens() {
         // If cache file has not been created yet
         if (Files.notExists(Paths.get(tokenCachePath))) {
-            return new Pair<>(CacheState.CACHE_DNE, null);
+            return null;
         }
 
         GenericCredentials genericCredentials = null;
@@ -68,35 +69,38 @@ class TokenCache implements ITokenCache {
             String accessToken = lines.get(0).split("\t")[1];
             String refreshToken = lines.get(1).split("\t")[1];
             String accessDuration = lines.get(2).split("\t")[1];
-            String accessCreationTimeStamp = lines.get(3).split("\t")[1];
+
             logger.info(String.format("Loaded tokens from file with name \"%s\"", tokenCachePath));
-            logger.debug("Loaded access token: " + accessToken);
-            logger.debug("Loaded refresh token: " + refreshToken);
-            logger.debug("Loaded access token duration: " + accessDuration);
-            logger.debug("Loaded access token timestamp: " + accessCreationTimeStamp);
+            logger.debug("Loaded access token: " + accessToken
+                    + "\nLoaded refresh token: " + refreshToken
+                    + "\nLoaded access token duration: " + accessDuration);
 
             genericCredentials = new GenericCredentials.Builder()
                     .withAccessToken(accessToken)
                     .withRefreshToken(refreshToken)
                     .withExpiresIn(Integer.valueOf(accessDuration))
-                    .withAccessCreationTimeStamp(accessCreationTimeStamp)
                     .build();
 
         } catch (IOException e) {
             e.printStackTrace();
+            return null;
+        }
+        return genericCredentials;
+    }
 
+    public boolean isValid() {
+        if (Files.notExists(Paths.get(tokenCachePath))) {
+            logger.info("Token cache does not exist");
+            return false;
         }
         // TODO: Implement checking if token is expired based on timestamp
         // If the access token is expired
         // if ( ... convert things to ints, do math ) { return CacheState.ACCESS_TOKEN_EXPIRED; }
+        if (false){
+            logger.info("Cached token was expired");
+            return false;
+        }
 
-        return new Pair<>(CacheState.ACCESS_TOKEN_VALID, genericCredentials);
-    }
-
-    public enum CacheState {
-        CACHE_DNE,
-        ACCESS_TOKEN_EXPIRED,
-        ACCESS_TOKEN_VALID,
-        ACCESS_TOKEN_INVALID,
+        return true;
     }
 }
