@@ -1,12 +1,13 @@
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
-import com.wrapper.spotify.model_objects.specification.Artist;
-import com.wrapper.spotify.requests.data.artists.GetArtistRequest;
+import com.wrapper.spotify.model_objects.AbstractModelObject;
 import org.apache.hc.core5.http.ParseException;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+
+import facade.*;
 
 import java.io.IOException;
 import java.util.concurrent.Callable;
@@ -106,7 +107,7 @@ class InfoCommand implements Callable<Integer> {
     @Parameters(index = "1", description = "The ID of item to retrieve info for")
     private String itemID;
 
-    public void getArtist_Sync() throws IOException, ParseException, SpotifyWebApiException {
+    public void getItemInfo() throws IOException, ParseException, SpotifyWebApiException {
         SpotifyApi spotifyApi = new SpotifyManager.Builder()
                 //.withAuthFlowType("CodeFlow")
                 .build()
@@ -114,21 +115,16 @@ class InfoCommand implements Callable<Integer> {
 
         if (spotifyApi == null) System.exit(1);
 
-        GetArtistRequest getArtistRequest = spotifyApi.getArtist(itemID)
-                .build();
+        SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
 
-        try {
-            Artist artist = getArtistRequest.execute();
-            System.out.println("Artist Name: " + artist.getName());
-        } catch (IOException | SpotifyWebApiException | ParseException e) {
-            System.out.println("Error: " + e.getMessage());
-        }
+        AbstractModelObject item =  spotifyFacade.getItem(itemType, itemID);
+        System.out.println(spotifyFacade.itemToPrettyString(item));
     }
 
     @Override
     public Integer call() {
         try {
-            getArtist_Sync();
+            getItemInfo();
         } catch (IOException | SpotifyWebApiException | ParseException e) {
             System.out.println("Error: " + e.getMessage());
         }
