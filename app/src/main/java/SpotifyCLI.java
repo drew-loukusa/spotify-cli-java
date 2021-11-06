@@ -1,4 +1,6 @@
+import com.neovisionaries.i18n.CountryCode;
 import com.wrapper.spotify.SpotifyApi;
+import com.wrapper.spotify.enums.ModelObjectType;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.model_objects.AbstractModelObject;
 import org.apache.hc.core5.http.ParseException;
@@ -55,6 +57,34 @@ class FollowCommand implements Callable<Integer> {
         System.out.println("NOT IMPLEMENTED!");
         System.out.println("\n=============================================");
 
+        SpotifyApi spotifyApi = new SpotifyManager.Builder()
+                //.withAuthFlowType("CodeFlow")
+                .build()
+                .CreateSession();
+
+        if (spotifyApi == null) System.exit(1);
+
+        SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
+
+        if (itemType.equals("playlist") || itemType.equals("artist")) {
+            ModelObjectType type = itemType.equals("artist") ? ModelObjectType.ARTIST : ModelObjectType.PLAYLIST;
+
+            String[] bar = new String[1];
+            bar[0] = itemID;
+            try {
+                var request = spotifyApi.followArtistsOrUsers(type, bar).build().execute();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (SpotifyWebApiException e) {
+                e.printStackTrace();
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+        }
+        else {
+            System.err.println("The only supported types for the 'follow' command are 'playlist' and 'artist' ");
+        }
+
         return 0;
     }
 }
@@ -81,10 +111,21 @@ class ListCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        System.out.println("=============================================");
-        System.out.printf("Item type: %s, limit: %d, offset: %d", itemType, limit, offset);
-        System.out.println("NOT IMPLEMENTED!");
-        System.out.println("\n=============================================");
+        // TODO: Create a separate picocli file for SETUP/CONFIG commands/options
+        // It will sit in front of ALL commands and pass a configured spotify FACADE object to them
+        // The goal will be to have a fully configured spotify facade passed in, so no configuring is done in this file
+        SpotifyApi spotifyApi = new SpotifyManager.Builder()
+                //.withAuthFlowType("CodeFlow")
+                .build()
+                .CreateSession();
+
+        if (spotifyApi == null) System.exit(1);
+
+        SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
+
+        AbstractModelObject collection = spotifyFacade.getUserCollection(itemType, limit, offset, CountryCode.US);
+        if (collection != null)
+            System.out.println(spotifyFacade.collectionToPrettyString(collection));
 
         return 0;
     }
@@ -118,7 +159,8 @@ class InfoCommand implements Callable<Integer> {
         SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
 
         AbstractModelObject item =  spotifyFacade.getItem(itemType, itemID);
-        System.out.println(spotifyFacade.itemToPrettyString(item));
+        if (item != null)
+            System.out.println(spotifyFacade.itemToPrettyString(item));
     }
 
     @Override

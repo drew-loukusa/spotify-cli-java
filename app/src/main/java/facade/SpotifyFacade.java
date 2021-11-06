@@ -1,5 +1,6 @@
 package facade;
 
+import com.neovisionaries.i18n.CountryCode;
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.enums.ModelObjectType;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
@@ -13,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * A wrapper class around this wrapper https://github.com/spotify-web-api-java/spotify-web-api-java
@@ -65,23 +67,39 @@ public class SpotifyFacade {
      * @return A Paging or PagingCursorBased object (check class type and cast as needed)
      */
     @Nullable
-    public AbstractModelObject getUserCollection(@NotNull String itemType) {
+    public AbstractModelObject getUserCollection(@NotNull String itemType, int limit, int offset, CountryCode market) {
         AbstractDataRequest request = null;
         switch (itemType) {
             case "album":
-                request = spotifyApi.getCurrentUsersSavedAlbums().build();
+                request = spotifyApi.getCurrentUsersSavedAlbums()
+                        .limit(limit)
+                        .offset(offset)
+                        .market(market)
+                        .build();
                 break;
             case "artist":
-                request = spotifyApi.getUsersFollowedArtists(ModelObjectType.ARTIST).build();
+                request = spotifyApi.getUsersFollowedArtists(ModelObjectType.ARTIST)
+                        .limit(limit)
+                        .build();
                 break;
             case "playlist":
-                request = spotifyApi.getListOfCurrentUsersPlaylists().build();
+                request = spotifyApi.getListOfCurrentUsersPlaylists()
+                        .limit(limit)
+                        .offset(offset)
+                        .build();
                 break;
             case "track":
-                request = spotifyApi.getUsersSavedTracks().build();
+                request = spotifyApi.getUsersSavedTracks()
+                        .limit(limit)
+                        .offset(offset)
+                        .market(market)
+                        .build();
                 break;
             case "show":
-                request = spotifyApi.getUsersSavedShows().build();
+                request = spotifyApi.getUsersSavedShows()
+                        .limit(limit)
+                        .offset(offset)
+                        .build();
                 break;
             case "episode":
                 System.err.println("No support in the Spotify Wrapper for getting a users saved episodes!");
@@ -103,35 +121,51 @@ public class SpotifyFacade {
     public String itemToPrettyString(@NotNull AbstractModelObject obj) {
         String repr = null;
         var itemType = obj.getClass().getSimpleName();
+        String addedAt = null;
         switch (itemType) {
+            case "SavedAlbum":
+                addedAt = ((SavedAlbum) obj).getAddedAt().toString();
+                obj = ((SavedAlbum) obj).getAlbum();
             case "Album":
-                // TODO: Implement nice looking string for humans to read
-                obj = (Album) obj;
-                repr = obj.toString();
+                var album = (Album) obj;
+                repr = "Name: " + album.getName();
+                //TODO: Fix artist printing, Artists here, is a sub object. Just get artist name
+                //repr += "\nArtists: " + Arrays.toString(Arrays.stream(album.getArtists().);
+                repr += "\nID: " + album.getId();
+                repr += "\nLink: " + album.getExternalUrls().getExternalUrls().get("spotify");
+                repr += "\nGenres: " + Arrays.toString(album.getGenres());
+                repr += "\nType: " + album.getAlbumType();
+                repr += "\nLabel: " + album.getLabel();
+                repr += "\nRelease date: " + album.getReleaseDate();
+                if (addedAt != null)
+                    repr += "\nAdded at: " + addedAt;
                 break;
             case "Artist":
-                // TODO: Implement nice looking string for humans to read
-                obj = (Artist) obj;
-                repr = obj.toString();
+                var artist = (Artist) obj;
+                repr = "Name: " + artist.getName();
+                repr += "\nID: " + artist.getId();
+                repr += "\nLink: " + artist.getExternalUrls().getExternalUrls().get("spotify");
+                repr += "\nGenres: " + Arrays.toString(artist.getGenres());
+                repr += "\nFollowers: " + artist.getFollowers().getTotal().toString();
                 break;
             case "Playlist":
                 // TODO: Implement nice looking string for humans to read
-                obj = (Playlist) obj;
+                var playlist = (Playlist) obj;
                 repr = obj.toString();
                 break;
             case "Track":
                 // TODO: Implement nice looking string for humans to read
-                obj = (Track) obj;
+                var track = (Track) obj;
                 repr = obj.toString();
                 break;
             case "Show":
                 // TODO: Implement nice looking string for humans to read
-                obj = (Show) obj;
+                var show = (Show) obj;
                 repr = obj.toString();
                 break;
             case "Episode":
                 // TODO: Implement nice looking string for humans to read
-                obj = (Episode) obj;
+                var episode = (Episode) obj;
                 repr = obj.toString();
                 break;
             default:
@@ -145,7 +179,7 @@ public class SpotifyFacade {
 
     @Nullable
     public String collectionToPrettyString(@NotNull AbstractModelObject obj) {
-        String repr = null;
+        String repr = "";
         var objClass = obj.getClass();
         boolean isPaging = Paging.class.equals(objClass);
         boolean isPagingCursorBased = PagingCursorbased.class.equals(objClass);
@@ -159,6 +193,11 @@ public class SpotifyFacade {
         }
         // TODO: Finish implementation of THIS method
         // Currently, I am grabbing the items from above, next is to get other relevant infos and put them into a String
+        for (var item : items){
+            repr += "\n-----------------------------------------------------------\n";
+            repr += itemToPrettyString((AbstractModelObject) item);
+        }
+
         return repr;
     }
 

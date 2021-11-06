@@ -41,7 +41,7 @@ class SpotifyManager {
 
     // These are optional
     private static final String SPOTIFY_CLIENT_SECRET = dotenv.get("SPOTIFY_CLIENT_SECRET");
-    private static final String SPOTIFY_AUTH_SCOPES = dotenv.get("SPOTIFY_AUTH_SCOPES");
+    private static final String SPOTIFY_AUTH_SCOPES = dotenv.get("SPOTIFY_AUTH_SCOPES").replace(',', ' ');;
 
     private final String clientID;
     private final String clientSecret;
@@ -81,7 +81,7 @@ class SpotifyManager {
                 SPOTIFY_AUTH_FLOW
         );
         this.authScopes = setVar(
-                "SPOTIFY_SCOPE",
+                "SPOTIFY_AUTH_SCOPES",
                 null,
                 builder.authScopes,
                 SPOTIFY_AUTH_SCOPES
