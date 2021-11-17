@@ -1,6 +1,7 @@
 package facade;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.List;
@@ -37,14 +38,16 @@ interface Mutable{
     /**
      * Add an item to the collection.
      * Accepts arbitrary keyword arguments to allow better control over how item is added to collection
-     * @param item
+     * @param item The item to be added
+     * @param kwargs An optional dict of keyword arguments
      */
-    void add(@NotNull IItem item, HashMap<String, String> kwargs);
+    void add(@NotNull IItem item, @Nullable HashMap<String, String> kwargs);
 
     /**
      *  Remove an item from the collection
      *  Accepts arbitrary keyword arguments to allow better control over how item is removed from collection
      * @param item
+     * @param kwargs An optional dict of keyword arguments
      */
-    void remove(@NotNull IItem item, HashMap<String, String> kwargs);
+    void remove(@NotNull IItem item, @Nullable HashMap<String, String> kwargs);
 }

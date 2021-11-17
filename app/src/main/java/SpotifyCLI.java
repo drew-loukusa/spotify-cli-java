@@ -5,9 +5,7 @@ import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.model_objects.AbstractModelObject;
 import org.apache.hc.core5.http.ParseException;
 import picocli.CommandLine;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
+import picocli.CommandLine.*;
 
 import facade.*;
 
@@ -25,8 +23,43 @@ import java.util.concurrent.Callable;
         }
 )
 class SpotifyCLI implements Callable<Integer> {
+
+    // TODO: Move defaults into globals, or static class vars
+    @Option(names = {"--authFlow"}, description = "The authentication flow to use.")
+    private String authFlow;
+
+    @Option(names = {"--redirectURI"}, description = "The redirect URI to use.")
+    private String redirectURI;
+
+    private int executionStrategy(ParseResult parseResult) {
+        init(); // custom initialization to be done before executing any command or subcommand
+        return new CommandLine.RunLast().execute(parseResult); // default execution strategy
+    }
+
+    // TODO: Add Parent reference in all subcommands to spotifyFacade
+    public SpotifyFacade spotifyFacade;
+    public SpotifyApi spotifyApi;
+
+    private void init() {
+        var spotifyApiBuilder = new SpotifyManager.Builder();
+        // TODO: Add the rest of the configuration settings as options above and here so they can be set on the command line
+        if (authFlow != null)
+            spotifyApiBuilder.withAuthFlowType(authFlow);
+        if (redirectURI != null)
+            spotifyApiBuilder.withRedirectURI(redirectURI);
+
+        spotifyApi = spotifyApiBuilder.build().CreateSession();
+
+        if (spotifyApi == null) System.exit(1);
+
+        spotifyFacade = new SpotifyFacade(spotifyApi);
+    }
+
     public static void main(String... args) {
-        int exitCode = new CommandLine(new SpotifyCLI()).execute(args);
+        var spotifyCLI = new SpotifyCLI();
+        int exitCode = new CommandLine(spotifyCLI)
+                .setExecutionStrategy(spotifyCLI::executionStrategy)
+                .execute(args);
         System.exit(exitCode);
     }
 
@@ -54,10 +87,10 @@ class FollowCommand implements Callable<Integer> {
     public Integer call() {
         System.out.println("=============================================");
         System.out.printf("Item type: %s, Item ID: %s", itemType, itemID);
-        System.out.println("NOT IMPLEMENTED!");
+        System.out.println("PARTIALLY IMPLEMENTED!");
         System.out.println("\n=============================================");
 
-        SpotifyApi spotifyApi = new SpotifyManager.Builder()
+        var spotifyApi = new SpotifyManager.Builder()
                 //.withAuthFlowType("CodeFlow")
                 .build()
                 .CreateSession();
@@ -67,21 +100,15 @@ class FollowCommand implements Callable<Integer> {
         SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
 
         if (itemType.equals("playlist") || itemType.equals("artist")) {
-            ModelObjectType type = itemType.equals("artist") ? ModelObjectType.ARTIST : ModelObjectType.PLAYLIST;
+            var type = itemType.equals("artist") ? ModelObjectType.ARTIST : ModelObjectType.PLAYLIST;
 
-            String[] bar = new String[1];
-            bar[0] = itemID;
+            String[] idsToFollow = {itemID};
             try {
-                var request = spotifyApi.followArtistsOrUsers(type, bar).build().execute();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (SpotifyWebApiException e) {
-                e.printStackTrace();
-            } catch (ParseException e) {
+                var request = spotifyApi.followArtistsOrUsers(type, idsToFollow).build().execute();
+            } catch (IOException | SpotifyWebApiException | ParseException e) {
                 e.printStackTrace();
             }
-        }
-        else {
+        } else {
             System.err.println("The only supported types for the 'follow' command are 'playlist' and 'artist' ");
         }
 
@@ -95,6 +122,9 @@ class FollowCommand implements Callable<Integer> {
         description = "List saved/followed items from your library."
 )
 class ListCommand implements Callable<Integer> {
+
+    @ParentCommand
+    private SpotifyCLI spotifyCLI;
 
     @Parameters(
             index = "0",
@@ -112,17 +142,9 @@ class ListCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         // TODO: Create a separate picocli file for SETUP/CONFIG commands/options
-        // It will sit in front of ALL commands and pass a configured spotify FACADE object to them
-        // The goal will be to have a fully configured spotify facade passed in, so no configuring is done in this file
-        SpotifyApi spotifyApi = new SpotifyManager.Builder()
-                //.withAuthFlowType("CodeFlow")
-                .build()
-                .CreateSession();
-
-        if (spotifyApi == null) System.exit(1);
-
-        SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
-
+        // UPDATE: May not need to do that. I can define spotifyAPI config options on the ENTRY command,
+        // and also use the executionSTrategy method to setup the spotifyAPI + facade objects.
+        SpotifyFacade spotifyFacade = spotifyCLI.spotifyFacade;
         AbstractModelObject collection = spotifyFacade.getUserCollection(itemType, limit, offset, CountryCode.US);
         if (collection != null)
             System.out.println(spotifyFacade.collectionToPrettyString(collection));
@@ -158,7 +180,7 @@ class InfoCommand implements Callable<Integer> {
 
         SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
 
-        AbstractModelObject item =  spotifyFacade.getItem(itemType, itemID);
+        AbstractModelObject item = spotifyFacade.getItem(itemType, itemID);
         if (item != null)
             System.out.println(spotifyFacade.itemToPrettyString(item));
     }
