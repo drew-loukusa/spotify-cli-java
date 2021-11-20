@@ -8,7 +8,6 @@ import com.wrapper.spotify.requests.authorization.authorization_code.Authorizati
 import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERefreshRequest;
 import com.wrapper.spotify.requests.authorization.authorization_code.pkce.AuthorizationCodePKCERequest;
 import com.wrapper.spotify.requests.authorization.client_credentials.ClientCredentialsRequest;
-import org.apache.hc.core5.http.HttpRequest;
 import org.apache.hc.core5.http.ParseException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,11 +16,8 @@ import org.slf4j.LoggerFactory;
 import utility.CallbackServer;
 import utility.PKCE;
 
-import javax.print.attribute.standard.Destination;
 import java.awt.*;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.security.NoSuchAlgorithmException;
@@ -56,6 +52,17 @@ class GenericCredentials {
         this.accessCreationTimeStamp = builder.accessCreationTimeStamp;
     }
 
+    public static String getTimeStamp() {
+        LocalDateTime now = LocalDateTime.now();
+        int year = now.getYear();
+        int month = now.getMonthValue();
+        int day = now.getDayOfMonth();
+        int hour = now.getHour();
+        int minute = now.getMinute();
+        int second = now.getSecond();
+        return String.format("%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
+    }
+
     public String getAccessToken() {
         return accessToken;
     }
@@ -68,17 +75,8 @@ class GenericCredentials {
         return expiresIn;
     }
 
-    public String getAccessCreationTimeStamp() { return accessCreationTimeStamp; }
-
-    public static String getTimeStamp(){
-        LocalDateTime now = LocalDateTime.now();
-        int year = now.getYear();
-        int month = now.getMonthValue();
-        int day = now.getDayOfMonth();
-        int hour = now.getHour();
-        int minute = now.getMinute();
-        int second = now.getSecond();
-        return String.format("%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
+    public String getAccessCreationTimeStamp() {
+        return accessCreationTimeStamp;
     }
 
     public static class Builder {
@@ -109,7 +107,7 @@ class GenericCredentials {
          * FORMAT: %d-%02d-%02d %02d:%02d:%02d
          * EXAMPLE DATE: 2021-10-29 14:02:16
          */
-        public Builder withAccessCreationTimeStamp(String accessCreationTimeStamp){
+        public Builder withAccessCreationTimeStamp(String accessCreationTimeStamp) {
             // TODO: validate format of string here, raise exception?
             this.accessCreationTimeStamp = accessCreationTimeStamp;
             return this;
@@ -117,6 +115,42 @@ class GenericCredentials {
 
         public GenericCredentials build() {
             return new GenericCredentials(this);
+        }
+    }
+}
+
+class AuthUtil {
+    public static AbstractAuthorizationFlow createAuthFlow(
+            String authFlowType,
+            String authScopes,
+            SpotifyApi spotifyApi,
+            CallbackServer.Builder cbServerBuilder
+    ) {
+        // TODO: Add logger here?
+        switch (authFlowType) {
+            case "PKCE":
+                //logger.info("Auth Code with PKCE flow selected");
+                var authFlowPKCEBuilder = new AuthFlowPKCE.Builder(spotifyApi, cbServerBuilder)
+                        .withShowDialog(false);
+                if (authScopes != null)
+                    authFlowPKCEBuilder.withScope(authScopes);
+                return authFlowPKCEBuilder.build();
+
+            case "CodeFlow":
+                //logger.info("Auth Code flow selected");
+                var authFlowBuilder = new AuthFlowCodeFlow.Builder(spotifyApi, cbServerBuilder)
+                        .withShowDialog(false);
+                if (authScopes != null)
+                    authFlowBuilder.withScope(authScopes);
+                return authFlowBuilder.build();
+
+            case "ClientCredentials":
+                //logger.info("Client Credentials flow selected");
+                return new AuthFlowClientCredentials.Builder(spotifyApi, cbServerBuilder)
+                        .build();
+            default:
+                //logger.error("No auth flow selected");
+                return null;
         }
     }
 }
@@ -139,6 +173,7 @@ abstract class AbstractAuthorizationFlow implements IAuthorizationFlow {
     public static abstract class Builder {
         private final SpotifyApi spotifyApi;
         private final CallbackServer.Builder cbServerBuilder;
+
         protected Builder(SpotifyApi spotifyApi, CallbackServer.Builder cbServerBuilder) {
             this.spotifyApi = spotifyApi;
             this.cbServerBuilder = cbServerBuilder;
@@ -169,7 +204,7 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
     @Override
     public GenericCredentials refresh() {
         AuthorizationCodeRefreshRequest authorizationCodeRefreshRequest = spotifyApi.authorizationCodeRefresh()
-            .build();
+                .build();
         AuthorizationCodeCredentials credentials = null;
         try {
             credentials = authorizationCodeRefreshRequest.execute();
@@ -271,7 +306,7 @@ class AuthFlowCodeFlow extends AbstractAuthorizationFlow {
         }
 
         public AuthFlowCodeFlow build() {
-           return new AuthFlowCodeFlow(this);
+            return new AuthFlowCodeFlow(this);
         }
     }
 }

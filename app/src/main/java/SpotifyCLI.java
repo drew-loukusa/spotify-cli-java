@@ -6,8 +6,7 @@ import com.wrapper.spotify.model_objects.AbstractModelObject;
 import org.apache.hc.core5.http.ParseException;
 import picocli.CommandLine;
 import picocli.CommandLine.*;
-
-import facade.*;
+import utility.CallbackServer;
 
 import java.io.IOException;
 import java.util.concurrent.Callable;
@@ -24,12 +23,34 @@ import java.util.concurrent.Callable;
 )
 class SpotifyCLI implements Callable<Integer> {
 
-    // TODO: Move defaults into globals, or static class vars
+    // TODO: THINK ABOUT THIS:
+    // Defaults for these options currently live in SpotifyManager
+    // Should we move defaults into globals, or static class vars HERE? Place defaults in a file? Not sure.
+    // I guess what I'm asking is, does it make sense/does it feel right, to have defaults stored in source code.
+    // They are reasonable, but is being allowed to change the defaults also behavior and end user might want?
+
+    // I think being allowed to change the defaults IS reasonable.
+    // I think providing defaults is also good if a user just wants to run the program with out having to set it up
+    // Maybe, leave in the defaults you have in source, but give users a way to override them via config file.
+
+    @Option(names = {"--clientID"}, description = "The client ID to use.")
+    private String clientID;
+
+    @Option(names = {"--clientSecret"}, description = "The client secret to use. (If one is required for the selected auth flow)")
+    private String clientSecret;
+
+    // TODO: Add supported auth flow (as names) to the help string. Also add description or link to description of authflows
+    // also add WHY you would want to use each. Maybe just give short blurb then link to spotify auth guide?
     @Option(names = {"--authFlow"}, description = "The authentication flow to use.")
     private String authFlow;
 
     @Option(names = {"--redirectURI"}, description = "The redirect URI to use.")
     private String redirectURI;
+
+    // TODO: Add these as options
+    //tokenCaching
+    //tokenRefresh
+    //scopes
 
     private int executionStrategy(ParseResult parseResult) {
         init(); // custom initialization to be done before executing any command or subcommand
@@ -37,21 +58,57 @@ class SpotifyCLI implements Callable<Integer> {
     }
 
     // TODO: Add Parent reference in all subcommands to spotifyFacade
+    // TODO: Add functionality into facade so you can just inject facade reference
     public SpotifyFacade spotifyFacade;
     public SpotifyApi spotifyApi;
 
     private void init() {
-        var spotifyApiBuilder = new SpotifyManager.Builder();
-        // TODO: Add the rest of the configuration settings as options above and here so they can be set on the command line
-        if (authFlow != null)
-            spotifyApiBuilder.withAuthFlowType(authFlow);
-        if (redirectURI != null)
-            spotifyApiBuilder.withRedirectURI(redirectURI);
+        // Collect command line args, environment vars, and vars stored in .env files.
+        // The class attributes on 'env' will be set according to that order.
+        var env = new Environment.Builder()
+                .withAuthFlowType(authFlow)
+                .withRedirectURI(redirectURI)
+                //.withAuthScopes("")
+                .withClientID(clientID)
+                .withClientSecret(clientSecret)
+                //.withDisableTokenCaching(false)
+                //.withDisableTokenRefresh(false)
+                .build();
 
-        spotifyApi = spotifyApiBuilder.build().CreateSession();
+        // Create and configure a SpotifyApi object
+        spotifyApi = SpotifyFacade.createAndConfigureSpotifyApi(
+                env.redirectURI,
+                env.clientID,
+                env.clientSecret);
 
-        if (spotifyApi == null) System.exit(1);
+        // Create call back server to be used by selected auth flow
+        var cbServerBuilder = new CallbackServer.Builder()
+                .withHostName(env.callbackServerHostName)
+                .withPort(env.callbackServerPort);
 
+        // Create authentication flow, for "authenticating" the spotify instance
+        AbstractAuthorizationFlow authFlow = AuthUtil.createAuthFlow(
+                env.authFlowType,
+                env.authScopes,
+                spotifyApi,
+                cbServerBuilder);
+
+        // Attempt to authenticate
+        AuthManager.AuthStatus res = AuthManager.authenticate(
+                env.clientSecret,
+                env.disableTokenCaching,
+                env.disableTokenRefresh,
+                authFlow,
+                spotifyApi);
+
+        if (res == AuthManager.AuthStatus.FAIL) {
+            System.exit(1);
+        }
+
+        // With a fully configured and authenticated SpotifyApi object, create a facade and pass in the SpotifyApi object
+        //---------------------------------------------------------------------
+        // This facade object will be used by all sub-commands to interact with the SpotifyApi
+        // Picocli injects a reference to this object into all sub-commands
         spotifyFacade = new SpotifyFacade(spotifyApi);
     }
 
@@ -77,6 +134,9 @@ class SpotifyCLI implements Callable<Integer> {
 )
 class FollowCommand implements Callable<Integer> {
 
+    @ParentCommand
+    private SpotifyApi spotifyApi;
+
     @Parameters(index = "0", description = "The type of item to follow. Accepted types are: 'playlist', 'artist'")
     private String itemType;
 
@@ -89,15 +149,6 @@ class FollowCommand implements Callable<Integer> {
         System.out.printf("Item type: %s, Item ID: %s", itemType, itemID);
         System.out.println("PARTIALLY IMPLEMENTED!");
         System.out.println("\n=============================================");
-
-        var spotifyApi = new SpotifyManager.Builder()
-                //.withAuthFlowType("CodeFlow")
-                .build()
-                .CreateSession();
-
-        if (spotifyApi == null) System.exit(1);
-
-        SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
 
         if (itemType.equals("playlist") || itemType.equals("artist")) {
             var type = itemType.equals("artist") ? ModelObjectType.ARTIST : ModelObjectType.PLAYLIST;
@@ -160,6 +211,9 @@ class ListCommand implements Callable<Integer> {
 )
 class InfoCommand implements Callable<Integer> {
 
+    @ParentCommand
+    private SpotifyFacade spotifyFacade;
+
     @Parameters(
             index = "0",
             description = "The type of the item. " +
@@ -171,15 +225,6 @@ class InfoCommand implements Callable<Integer> {
     private String itemID;
 
     public void getItemInfo() throws IOException, ParseException, SpotifyWebApiException {
-        SpotifyApi spotifyApi = new SpotifyManager.Builder()
-                //.withAuthFlowType("CodeFlow")
-                .build()
-                .CreateSession();
-
-        if (spotifyApi == null) System.exit(1);
-
-        SpotifyFacade spotifyFacade = new SpotifyFacade(spotifyApi);
-
         AbstractModelObject item = spotifyFacade.getItem(itemType, itemID);
         if (item != null)
             System.out.println(spotifyFacade.itemToPrettyString(item));
