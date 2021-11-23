@@ -1,6 +1,7 @@
 package spotifyCliJava;
 
 import com.wrapper.spotify.SpotifyApi;
+import com.wrapper.spotify.SpotifyHttpManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -14,6 +15,8 @@ import spotifyCliJava.authorization.flows.utility.CallbackServer;
 import spotifyCliJava.authorization.tokenCaching.SpotifyCliTokenCache;
 import spotifyCliJava.utility.Environment;
 
+import java.net.URI;
+
 class SpotifyCliSetup
 {
     private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.spotifyCliJava.SpotifyCliSetup");
@@ -21,7 +24,7 @@ class SpotifyCliSetup
     @Nullable
     public static SpotifyApi createAndAuthenticate(@NotNull Environment env){
         // Create and configure a SpotifyApi object
-        SpotifyApi spotifyApi = SpotifyFacade.createAndConfigureSpotifyApi(
+        SpotifyApi spotifyApi = createAndConfigureSpotifyApi(
                 env.redirectURI,
                 env.clientID,
                 env.clientSecret);
@@ -32,14 +35,14 @@ class SpotifyCliSetup
                 .withPort(env.callbackServerPort);
 
         // Create authentication flow, for "authenticating" the spotify instance
-        AbstractAuthorizationFlow authFlow = SpotifyCliSetup.createAuthFlow(
+        AbstractAuthorizationFlow authFlow = createAuthFlow(
                 env.authFlowType,
                 env.authScopes,
                 spotifyApi,
                 cbServerBuilder);
 
         // Attempt to authenticate
-        AuthManager.AuthStatus res = SpotifyCliSetup.authenticate(
+        AuthManager.AuthStatus res = authenticate(
                 env.clientSecret,
                 env.disableTokenCaching,
                 env.disableTokenRefresh,
@@ -50,6 +53,39 @@ class SpotifyCliSetup
             return null;
         }
         return spotifyApi;
+    }
+
+    public static SpotifyApi createAndConfigureSpotifyApi(@NotNull String redirectURI, @NotNull String clientID, String clientSecret){
+        // Create SpotifyApi object
+        //---------------------------------------------------------------------
+        var logMsg = "%s is null. Cannot create spotify session.";
+        var userErrorMsg = "ERROR: No configuration found for %s; cannot create Spotify session. " +
+                "Please set a configuration using an option/flag, an environment variable, or an .env file";
+
+        // TODO: Add support for logger here?
+        if (redirectURI == null || clientID == null) {
+            if (redirectURI == null) {
+                //logger.error(String.format(logMsg, "Redirect URI"));
+                System.err.printf((userErrorMsg) + "%n", "SPOTIFY_REDIRECT_URI");
+            }
+            if (clientID == null) {
+                //logger.error(String.format(logMsg, "Client ID"));
+                System.err.printf((userErrorMsg) + "%n", "SPOTIFY_CLIENT_ID");
+            }
+            System.exit(1);
+        }
+
+        final URI spotifyURI = SpotifyHttpManager.makeUri(redirectURI);
+
+        SpotifyApi.Builder spotifyApiBuilder = new SpotifyApi.Builder()
+                .setClientId(clientID)
+                .setRedirectUri(spotifyURI);
+
+        // Not all authentication flows require a client secret to be set
+        if (clientSecret != null)
+            spotifyApiBuilder.setClientSecret(clientSecret);
+
+        return spotifyApiBuilder.build();
     }
 
     @Nullable
