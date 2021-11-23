@@ -1,15 +1,20 @@
-import com.wrapper.spotify.SpotifyApi;
-import com.wrapper.spotify.SpotifyHttpManager;
+package spotifyCliJava.utility;
+
 import io.github.cdimascio.dotenv.Dotenv;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import utility.CallbackServer;
 
-import java.net.URI;
-
-class SpotifyManager {
-    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.SpotifyManager");
+/**
+ * A class for managing the environment of the Spotify CLI.
+ * This is essentially a class which, upon instantiation, initializes the class fields according to some precedence rules.
+ *
+ * The precedence is as follows:
+ * (1). Command line arguments (arguments passed in via the builder); These override everything else
+ * (2). spotifyCliJava.utility.Environment variables; These only override values set in a .env file
+ * (3). Vars set in a .env file; These are the lowest in terms of precedence
+ */
+public class Environment {
+    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.spotifyCliJava.utility.Environment");
 
     // TODO: Maybe move defaults out of code, or at least out of THIS Code
     // I can override the defaults in other places, so maybe this is fine? not Sure yet
@@ -20,8 +25,6 @@ class SpotifyManager {
     private static final String DEFAULT_AUTH_FLOW = "PKCE";
     private static final String DEFAULT_DISABLE_TOKEN_CACHING = "false";
     private static final String DEFAULT_DISABLE_TOKEN_REFRESH = "false";
-    private static final int DEFAULT_CALLBACK_SERVER_PORT = 8080;
-    private static final String DEFAULT_CALLBACK_SERVER_HOST_NAME = "0.0.0.0";
 
     // Don't raise exceptions if .env is missing, or if a var isn't set in the environment;
     // Defaults are provided for Client ID and redirect uri.
@@ -36,24 +39,22 @@ class SpotifyManager {
     private static final String SPOTIFY_REDIRECT_URI = dotenv.get("SPOTIFY_REDIRECT_URI");
     private static final String DISABLE_TOKEN_CACHING = dotenv.get("DISABLE_TOKEN_CACHING");
     private static final String DISABLE_TOKEN_REFRESH = dotenv.get("DISABLE_TOKEN_REFRESH");
-    private static final String CALLBACK_SERVER_HOSTNAME = dotenv.get("CALLBACK_SERVER_HOSTNAME");
-    private static final String CALLBACK_SERVER_PORT = dotenv.get("CALLBACK_SERVER_PORT");
 
     // These are optional
     private static final String SPOTIFY_CLIENT_SECRET = dotenv.get("SPOTIFY_CLIENT_SECRET");
-    private static final String SPOTIFY_AUTH_SCOPES = dotenv.get("SPOTIFY_AUTH_SCOPES");
+    private static final String SPOTIFY_AUTH_SCOPES = dotenv.get("SPOTIFY_AUTH_SCOPES").replace(',', ' ');;
 
-    private final String clientID;
-    private final String clientSecret;
-    private final String redirectURI;
-    private final String authFlowType;
-    private final String authScopes;
-    private final boolean disableTokenCaching;
-    private final boolean disableTokenRefresh;
-    private final String callbackServerHostName;
-    private final int callbackServerPort;
+    public final String clientID;
+    public final String clientSecret;
+    public final String redirectURI;
+    public final String authFlowType;
+    public final String authScopes;
+    public final boolean disableTokenCaching;
+    public final boolean disableTokenRefresh;
+    public String callbackServerHostName;
+    public int callbackServerPort;
 
-    private SpotifyManager(Builder builder) {
+    private Environment(Builder builder) {
         // If user did not set ENV vars, or create .env file, use defaults
         // For obvious reasons, there is no default for CLIENT_SECRET
         this.clientID = setVar(
@@ -81,7 +82,7 @@ class SpotifyManager {
                 SPOTIFY_AUTH_FLOW
         );
         this.authScopes = setVar(
-                "SPOTIFY_SCOPE",
+                "SPOTIFY_AUTH_SCOPES",
                 null,
                 builder.authScopes,
                 SPOTIFY_AUTH_SCOPES
@@ -102,18 +103,20 @@ class SpotifyManager {
                         DISABLE_TOKEN_CACHING
                 )
         );
-        this.callbackServerHostName = setVar(
-                "CALLBACK_SERVER_HOSTNAME",
-                DEFAULT_CALLBACK_SERVER_HOST_NAME,
-                CALLBACK_SERVER_HOSTNAME
-        );
-        this.callbackServerPort = Integer.parseInt(
-                setVar(
-                        "CALLBACK_SERVER_PORT",
-                        String.valueOf(DEFAULT_CALLBACK_SERVER_PORT),
-                        String.valueOf(CALLBACK_SERVER_PORT)
-                )
-        );
+
+        //TODO: If no port is specified via the redirect URI, what happens?
+        var tokens = this.redirectURI.split(":");
+        if (tokens.length > 1) {
+            if (tokens.length == 3)
+                this.callbackServerPort = Integer.parseInt(tokens[2]);
+            this.callbackServerHostName = tokens[1].substring(2);
+
+            logger.info("CALLBACK SERVER PORT: " + callbackServerPort);
+            logger.info("CALLBACK SERVER HOST NAME: " + callbackServerHostName);
+        }
+        else {
+            logger.error("Cannot parse callback server host or port, redirect URI is invalid: " + redirectURI);
+        }
     }
 
     /**
@@ -143,97 +146,6 @@ class SpotifyManager {
             logger.info(varName + ": <No assigned value>");
         }
         return chosenValue;
-    }
-
-    @Nullable
-    public SpotifyApi CreateSession() {
-        var logMsg = "%s is null. Cannot create spotify session.";
-        var userErrorMsg = "ERROR: No configuration found for %s; cannot create Spotify session. " +
-                "Please set a configuration using an option/flag, an environment variable, or an .env file";
-
-        // Create Spotify instance
-        //---------------------------------------------------------------------
-        if (redirectURI == null) {
-            logger.error(String.format(logMsg, "Redirect URI"));
-            System.err.printf((userErrorMsg) + "%n", "SPOTIFY_REDIRECT_URI");
-            return null;
-        }
-        final URI spotifyURI = SpotifyHttpManager.makeUri(redirectURI);
-
-        if (clientID == null) {
-            logger.error(String.format(logMsg, "Client ID"));
-            System.err.printf((userErrorMsg) + "%n", "SPOTIFY_CLIENT_ID");
-            return null;
-        }
-
-        var spotifyApiBuilder = new SpotifyApi.Builder()
-                .setClientId(clientID)
-                .setRedirectUri(spotifyURI);
-
-        // Not all authentication flows require a client secret to be set
-        if (clientSecret != null)
-            spotifyApiBuilder.setClientSecret(clientSecret);
-
-        var spotifyApi = spotifyApiBuilder.build();
-
-        // Configure a CallBackServer builder for use in the to-be-selected auth flow
-        var cbServerBuilder = new CallbackServer.Builder()
-                .withHostName(callbackServerHostName)
-                .withPort(callbackServerPort);
-
-        // Create authentication flow, for authenticating the spotify instance
-        //---------------------------------------------------------------------
-        AbstractAuthorizationFlow authFlow = null;
-        switch (authFlowType) {
-            case "PKCE":
-                logger.info("Auth Code with PKCE flow selected");
-                var authFlowPKCEBuilder = new AuthFlowPKCE.Builder(spotifyApi, cbServerBuilder)
-                        .withShowDialog(false);
-                if (authScopes != null)
-                    authFlowPKCEBuilder.withScope(authScopes);
-                authFlow = authFlowPKCEBuilder.build();
-                break;
-
-            case "CodeFlow":
-                logger.info("Auth Code flow selected");
-                var authFlowBuilder = new AuthFlowCodeFlow.Builder(spotifyApi, cbServerBuilder)
-                        .withShowDialog(false);
-                if (authScopes != null)
-                    authFlowBuilder.withScope(authScopes);
-                authFlow = authFlowBuilder.build();
-                break;
-
-            case "ClientCredentials":
-                logger.info("Client Credentials flow selected");
-                authFlow = new AuthFlowClientCredentials.Builder(spotifyApi, cbServerBuilder)
-                        .build();
-                break;
-            default:
-                logger.error("No auth flow selected");
-        }
-
-        // Since not all auth flows require a client secret, check if the current flow DOES require one
-        if (clientSecret == null && authFlow.requiresClientSecret()) {
-            logger.error(String.format(logMsg, "Client Secret") +
-                    "\nCurrent selected auth flow requires client secret to be set");
-            System.err.printf((userErrorMsg) + "%n", "SPOTIFY_CLIENT_SECRET");
-            System.err.println("Current selected auth flow requires client secret to be set");
-            return null;
-        }
-
-        assert authFlow != null;
-        var tokenCacher = new TokenCache();
-        var authManager = new AuthManager.Builder(authFlow, spotifyApi)
-                .withDisableTokenCaching(disableTokenCaching)
-                .withDisableTokenRefresh(disableTokenRefresh)
-                .withTokenCache(tokenCacher)
-                .build();
-
-        if (authManager.authenticateSpotifyInstance() == AuthManager.AuthStatus.FAIL) {
-            return null;
-        }
-
-        return spotifyApi;
     }
 
     public static class Builder {
@@ -283,8 +195,8 @@ class SpotifyManager {
             return this;
         }
 
-        public SpotifyManager build() {
-            return new SpotifyManager(this);
+        public Environment build() {
+            return new Environment(this);
         }
     }
 }

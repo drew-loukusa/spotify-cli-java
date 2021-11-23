@@ -1,7 +1,10 @@
+package spotifyCliJava.authorization.tokenCaching;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import spotifyCliJava.utility.GenericCredentials;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -9,29 +12,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 
-interface ITokenCache {
-    // Cache the tokens, whether that be to a file, to an in memory store, or database
-    void cacheTokens(@NotNull GenericCredentials genericCredentials);
-
-    // Load the tokens from the cache, into a GenericCredentials object and return it
-    GenericCredentials loadTokens();
-
-    // Is the cache valid? If loadTokens() is called, will it return a valid GenericCredentials object?
-    boolean isValid();
-
-    // Set the path (if the implementation is using a file based approach) to the token cache
-    // Non file based token caches can simply implement this and return self
-    // Returns self, so as  enable flow style programming
-    ITokenCache withTokenCachePath(String tokenCachePath);
-}
-
-class TokenCache implements ITokenCache {
-    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.TokenCache");
+public class SpotifyCliTokenCache implements ITokenCache {
+    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.spotifyCliJava.utility.TokenCache");
     // Provide default, but don't make final so path can be changed by user
     private String tokenCachePath = "token_cache.txt";
 
     @Override
-    public TokenCache withTokenCachePath(String tokenCachePath) {
+    public SpotifyCliTokenCache withTokenCachePath(String tokenCachePath) {
         this.tokenCachePath = tokenCachePath;
         return this;
     }

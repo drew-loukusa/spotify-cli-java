@@ -1,4 +1,4 @@
-package utility;/*
+package spotifyCliJava.authorization.flows.utility;/*
  * The following code is borrowed code that I have modified.
  * The original author is Jaxcskn on github: https://github.com/jaxcksn/nanoleafMusic
  * If this file ever makes it into a repo of mine, I need to add his license or something? He was using BSD 3
@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class CallbackServer {
     private static final Logger logger
-            = LoggerFactory.getLogger("spotify-cli-java.utility.CallbackServer");
+            = LoggerFactory.getLogger("spotify-cli-java.spotifyCliJava.authorization.flows.utility.CallbackServer");
     protected static HttpServer server;
     private final authServerHandler requestHandler = new authServerHandler();
     private int port;
@@ -85,7 +85,7 @@ public class CallbackServer {
 
     static public class authServerHandler implements HttpHandler {
         private static final Logger logger
-                = LoggerFactory.getLogger("spotify-cli-java.utility.CallbackServer.Builder");
+                = LoggerFactory.getLogger("spotify-cli-java.spotifyCliJava.authorization.flows.utility.CallbackServer.Builder");
         private final CountDownLatch tokenLatch = new CountDownLatch(1);
         private String authCode;
 

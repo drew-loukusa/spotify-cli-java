@@ -1,3 +1,5 @@
+package spotifyCliJava.authorization;
+
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.requests.data.artists.GetArtistRequest;
@@ -5,18 +7,21 @@ import org.apache.hc.core5.http.ParseException;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import spotifyCliJava.utility.GenericCredentials;
+import spotifyCliJava.authorization.tokenCaching.SpotifyCliTokenCache;
+import spotifyCliJava.authorization.tokenCaching.ITokenCache;
 
 import java.io.IOException;
 
-class AuthManager {
+public class AuthManager {
 
-    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.AuthManager");
-    // Fields that must be set at object instantiation
-    private ITokenCache tokenCache;
+    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.spotifyCliJava.authorization.AuthManager");
     private final SpotifyApi spotifyApi;
     private final IAuthorizationFlow authorizationFlow;
     private final boolean disableTokenCaching;
     private final boolean tokenCachingEnabled;
+    // Fields that must be set at object instantiation
+    private ITokenCache tokenCache;
     private boolean disableTokenRefresh;
     private boolean tokenRefreshEnabled;
 
@@ -36,21 +41,10 @@ class AuthManager {
         }
     }
 
-    public AuthStatus authenticateSpotifyInstance() {
-        if (disableTokenCaching) {
-            logger.info("Token caching disabled");
-        } else {
-            logger.info("Token caching enabled");
-        }
-        if (disableTokenRefresh) {
-            logger.info("Token refresh disabled");
-        } else {
-            logger.info("Token refresh enabled");
-        }
-
+    public AuthStatus authenticateWithTokenCache() {
         GenericCredentials genericCredentials;
-
         // Try to use tokens from the cache
+        // TODO: Should we check if we're in a valid state here? or outside of it, before wherever we want to call it?
         if (tokenCachingEnabled && tokenCache.isValid()) {
             logger.info("Attempting to load tokens from the cache");
             genericCredentials = tokenCache.loadTokens();
@@ -66,17 +60,18 @@ class AuthManager {
                     logger.info("Cached token was invalid");
                 }
             }
+        } else if (!tokenCachingEnabled) {
+            logger.info("Cannot load tokens from cache, token caching is disabled!");
+        } else {
+            logger.info("Cannot load tokens from cache, token cache is invalid!");
         }
+        return AuthStatus.FAIL;
+    }
 
-        /*
-         * Try to refresh the access token, provided the authorization flow type in use supports token refreshing,
-         * token caching is enabled, and the token cache exists.
-         *
-         * Sets accessToken, refreshToken, accessDuration, and accessCreationTimeStamp if successful.
-         *
-         * NOTE: Always call authorizationFlow.isRefreshable() to check if an auth flow supports refreshing before
-         * trying to invoke refresh on it
-         */
+    public AuthStatus authenticateWithTokenRefresh() {
+        GenericCredentials genericCredentials;
+        // NOTE: Always call authorizationFlow.isRefreshable() to check if an auth flow supports refreshing before
+        // trying to invoke refresh on it
         if (tokenCachingEnabled
                 && tokenRefreshEnabled
                 && authorizationFlow.isRefreshable()
@@ -95,11 +90,13 @@ class AuthManager {
                 }
             }
         }
+        // TODO: Add log statemntents if stuff is disabled? Do we need to?
+        return AuthStatus.FAIL;
+    }
 
-
-        // If valid tokens could not be retrieved any other way, require a full refresh
-        // This may mean the end user will have to sign in
-        logger.info("A full authorization is required, end user may be required to sign in");
+    public AuthStatus authenticateWithFullSignIn() {
+        GenericCredentials genericCredentials;
+        logger.info("A full spotifyCliJava.authorization is required, end user may be required to sign in");
         genericCredentials = authorizationFlow.authorize();
 
         if (tokenCachingEnabled)
@@ -111,8 +108,6 @@ class AuthManager {
             logger.info("Successfully retrieved a new access token from Spotify");
             return AuthStatus.SUCCESS;
         }
-
-        logger.info(msg);
         return AuthStatus.FAIL;
     }
 
@@ -124,7 +119,6 @@ class AuthManager {
             spotifyApi.setRefreshToken(refreshToken);
         }
     }
-
 
     /**
      * @return Upon failure, a string containing an error message, or upon success, an empty string.
@@ -162,7 +156,7 @@ class AuthManager {
             this.spotifyApi = spotifyApi;
         }
 
-        public Builder withTokenCache(TokenCache TokenCache) {
+        public Builder withTokenCache(SpotifyCliTokenCache TokenCache) {
             this.tokenCache = TokenCache;
             return this;
         }
