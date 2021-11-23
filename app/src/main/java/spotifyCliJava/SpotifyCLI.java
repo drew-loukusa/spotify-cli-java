@@ -1,3 +1,5 @@
+package spotifyCliJava;
+
 import com.neovisionaries.i18n.CountryCode;
 import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.enums.ModelObjectType;
@@ -6,7 +8,7 @@ import com.wrapper.spotify.model_objects.AbstractModelObject;
 import org.apache.hc.core5.http.ParseException;
 import picocli.CommandLine;
 import picocli.CommandLine.*;
-import utility.CallbackServer;
+import spotifyCliJava.utility.Environment;
 
 import java.io.IOException;
 import java.util.concurrent.Callable;
@@ -58,7 +60,7 @@ class SpotifyCLI implements Callable<Integer> {
     }
 
     // TODO: Add Parent reference in all subcommands to spotifyFacade
-    // TODO: Add functionality into facade so you can just inject facade reference
+    // TODO: Add functionality into spotifyCliJava.facade so you can just inject spotifyCliJava.facade reference
     public SpotifyFacade spotifyFacade;
     public SpotifyApi spotifyApi;
 
@@ -75,39 +77,14 @@ class SpotifyCLI implements Callable<Integer> {
                 //.withDisableTokenRefresh(false)
                 .build();
 
-        // Create and configure a SpotifyApi object
-        spotifyApi = SpotifyFacade.createAndConfigureSpotifyApi(
-                env.redirectURI,
-                env.clientID,
-                env.clientSecret);
-
-        // Create call back server to be used by selected auth flow
-        var cbServerBuilder = new CallbackServer.Builder()
-                .withHostName(env.callbackServerHostName)
-                .withPort(env.callbackServerPort);
-
-        // Create authentication flow, for "authenticating" the spotify instance
-        AbstractAuthorizationFlow authFlow = AuthUtil.createAuthFlow(
-                env.authFlowType,
-                env.authScopes,
-                spotifyApi,
-                cbServerBuilder);
-
-        // Attempt to authenticate
-        AuthManager.AuthStatus res = AuthManager.authenticate(
-                env.clientSecret,
-                env.disableTokenCaching,
-                env.disableTokenRefresh,
-                authFlow,
-                spotifyApi);
-
-        if (res == AuthManager.AuthStatus.FAIL) {
+        SpotifyApi spotifyApi = SpotifyCliSetup.createAndAuthenticate(env);
+        if (spotifyApi == null){
             System.exit(1);
         }
 
-        // With a fully configured and authenticated SpotifyApi object, create a facade and pass in the SpotifyApi object
+        // With a fully configured and authenticated SpotifyApi object, create a spotifyCliJava.facade and pass in the SpotifyApi object
         //---------------------------------------------------------------------
-        // This facade object will be used by all sub-commands to interact with the SpotifyApi
+        // This spotifyCliJava.facade object will be used by all sub-commands to interact with the SpotifyApi
         // Picocli injects a reference to this object into all sub-commands
         spotifyFacade = new SpotifyFacade(spotifyApi);
     }
@@ -194,7 +171,7 @@ class ListCommand implements Callable<Integer> {
     public Integer call() {
         // TODO: Create a separate picocli file for SETUP/CONFIG commands/options
         // UPDATE: May not need to do that. I can define spotifyAPI config options on the ENTRY command,
-        // and also use the executionSTrategy method to setup the spotifyAPI + facade objects.
+        // and also use the executionSTrategy method to setup the spotifyAPI + spotifyCliJava.facade objects.
         SpotifyFacade spotifyFacade = spotifyCLI.spotifyFacade;
         AbstractModelObject collection = spotifyFacade.getUserCollection(itemType, limit, offset, CountryCode.US);
         if (collection != null)

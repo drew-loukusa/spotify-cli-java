@@ -1,4 +1,4 @@
-package utility;
+package spotifyCliJava.authorization.flows.utility;
 /*
  * The following code is borrowed code that I have modified.
  * The original author is Jaxcskn on GitHub: https://github.com/jaxcksn/nanoleafMusic

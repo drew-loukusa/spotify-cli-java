@@ -1,4 +1,4 @@
-package facade;
+package spotifyCliJava.facade;
 
 /**
  * Item should be implemented by all items (Playlist, Artist, Album, Track, Episode, Show, etc)

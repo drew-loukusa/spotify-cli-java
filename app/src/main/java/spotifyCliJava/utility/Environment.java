@@ -1,3 +1,5 @@
+package spotifyCliJava.utility;
+
 import io.github.cdimascio.dotenv.Dotenv;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,11 +10,11 @@ import org.slf4j.LoggerFactory;
  *
  * The precedence is as follows:
  * (1). Command line arguments (arguments passed in via the builder); These override everything else
- * (2). Environment variables; These only override values set in a .env file
+ * (2). spotifyCliJava.utility.Environment variables; These only override values set in a .env file
  * (3). Vars set in a .env file; These are the lowest in terms of precedence
  */
-class Environment {
-    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.Environment");
+public class Environment {
+    private static final Logger logger = LoggerFactory.getLogger("spotify-cli-java.spotifyCliJava.utility.Environment");
 
     // TODO: Maybe move defaults out of code, or at least out of THIS Code
     // I can override the defaults in other places, so maybe this is fine? not Sure yet
